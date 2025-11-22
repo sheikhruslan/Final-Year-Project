@@ -19,10 +19,20 @@ import { api } from '../services/api';
 
 const COLORS = ['#4caf50', '#ff9800', '#f44336', '#9c27b0'];
 
+interface DashboardStats {
+  low_risk_count?: number;
+  medium_risk_count?: number;
+  high_risk_count?: number;
+  total_claims?: number;
+  flagged_claims?: number;
+  detection_rate?: number;
+  flagged_amount?: number;
+}
+
 export default function Dashboard() {
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
-    queryFn: api.getDashboardStats
+    queryFn: () => api.getDashboardStats()
   });
 
   const { data: trends } = useQuery({
