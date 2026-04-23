@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" class="{% if app_settings.dark_mode == 'true' %}dark{% endif %}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Life Tracker{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: {} }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar-link { transition: all 0.15s; border-radius: 6px; }
+        .sidebar-link:hover { background-color: rgba(59,130,246,0.1); }
+        .sidebar-link.active { background-color: rgba(59,130,246,0.15); font-weight: 600; }
+        .dark .sidebar-link:hover { background-color: rgba(96,165,250,0.15); }
+        .dark .sidebar-link.active { background-color: rgba(96,165,250,0.2); }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen text-gray-900 dark:text-gray-100 transition-colors">
+    <div id="sidebar" class="fixed left-0 top-0 h-full w-60 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out">
+        <div class="p-5">
+            <a href="/" class="text-xl font-bold block mb-6 text-gray-900 dark:text-white">Life Tracker</a>
+            <nav class="space-y-0.5 text-sm">
+                <a href="/journal" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">📔</span>Journal</a>
+                <a href="/habits" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">✅</span>Habits</a>
+                <a href="/financial" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">💰</span>Finance</a>
+                <a href="/jobs" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">💼</span>Jobs</a>
+                <a href="/todos" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">📝</span>Todos</a>
+                <a href="/shopping" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🛒</span>Shopping</a>
+                <div class="pt-3 pb-1"><div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase px-3">Wellness</div></div>
+                <a href="/gym" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">💪</span>Gym</a>
+                <a href="/gym/progress" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">📈</span>Gym Progress</a>
+                <a href="/routines" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🌅</span>Routines</a>
+                <a href="/sleep" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">😴</span>Sleep</a>
+                <a href="/water" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">💧</span>Water</a>
+                <a href="/diet" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🍽️</span>Diet</a>
+                <div class="pt-3 pb-1"><div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase px-3">Development</div></div>
+                <a href="/deen" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🕌</span>Deen</a>
+                <a href="/language" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🌍</span>Language</a>
+                <a href="/goals" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🎯</span>Goals</a>
+                <a href="/library" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">📚</span>Library</a>
+                <a href="/focus" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">⏱️</span>Focus</a>
+                <div class="pt-3 pb-1"><div class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase px-3">Planning</div></div>
+                <a href="/calendar" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">📅</span>Calendar</a>
+                <a href="/important-dates" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">🎂</span>Dates</a>
+                <div class="pt-4 border-t border-gray-200 dark:border-gray-700 mt-3">
+                    <a href="/settings" class="sidebar-link flex items-center px-3 py-1.5 text-gray-700 dark:text-gray-300"><span class="mr-2.5">⚙️</span>Settings</a>
+                </div>
+            </nav>
+        </div>
+    </div>
+
+    <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black/40 z-40 lg:hidden"></div>
+
+    <header class="lg:hidden fixed inset-x-0 top-0 h-14 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 z-40">
+        <div class="h-full px-3 flex items-center justify-between">
+            <button id="menuBtn" type="button" class="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800" aria-label="Open menu">
+                <span class="text-lg">☰</span>
+            </button>
+            <a href="/" class="font-semibold text-sm">Life Tracker</a>
+            <button type="button" class="notif-bell relative w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800" aria-label="Open notifications">
+                <span class="text-lg">🔔</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="lg:ml-60 min-h-screen pt-16 lg:pt-0">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+            <div class="hidden lg:flex justify-end mb-3 relative">
+                <button type="button" class="notif-bell relative w-10 h-10 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700" aria-label="Open notifications">
+                    <span class="text-lg">🔔</span>
+                </button>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat, msg in messages %}
+            <div class="mb-4 p-3 rounded text-sm {% if cat == 'error' %}bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400{% else %}bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400{% endif %}">{{ msg }}</div>
+            {% endfor %}{% endif %}{% endwith %}
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <div id="notifDrawer" class="hidden fixed right-3 top-16 lg:top-20 z-[60] w-[340px] max-w-[92vw] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl">
+        <div class="p-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 class="font-semibold text-sm">Notifications</h3>
+            <p class="text-xs text-gray-500 mt-1">Manage all reminder settings from Settings page.</p>
+        </div>
+
+        <div class="p-4 space-y-3">
+            <p class="text-sm text-gray-600 dark:text-gray-300">Use Settings to update water, prayer, todo, and special date reminder preferences.</p>
+            <a href="/settings" class="inline-flex items-center justify-center w-full py-2 rounded-lg bg-gray-900 text-white text-sm">Open Settings</a>
+        </div>
+    </div>
+
+    <script>
+        const cp = window.location.pathname;
+        document.querySelectorAll('.sidebar-link').forEach(l => { if(l.getAttribute('href')===cp) l.classList.add('active'); });
+
+        const sidebar = document.getElementById('sidebar');
+        const menuBtn = document.getElementById('menuBtn');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const closeSidebar = () => {
+            if (window.innerWidth >= 1024) return;
+            sidebar.classList.add('-translate-x-full');
+            sidebarOverlay.classList.add('hidden');
+        };
+        const openSidebar = () => {
+            sidebar.classList.remove('-translate-x-full');
+            sidebarOverlay.classList.remove('hidden');
+        };
+        if (menuBtn && sidebar && sidebarOverlay) {
+            menuBtn.addEventListener('click', openSidebar);
+            sidebarOverlay.addEventListener('click', closeSidebar);
+            document.querySelectorAll('.sidebar-link').forEach((link) => {
+                link.addEventListener('click', closeSidebar);
+            });
+            window.addEventListener('resize', () => {
+                if (window.innerWidth >= 1024) {
+                    sidebar.classList.remove('-translate-x-full');
+                    sidebarOverlay.classList.add('hidden');
+                } else {
+                    sidebar.classList.add('-translate-x-full');
+                }
+            });
+        }
+
+        const notifBellBtns = document.querySelectorAll('.notif-bell');
+        const notifDrawer = document.getElementById('notifDrawer');
+        if (notifBellBtns.length && notifDrawer) {
+            notifBellBtns.forEach((btn) => btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                notifDrawer.classList.toggle('hidden');
+            }));
+            document.addEventListener('click', function(e) {
+                const clickedBell = Array.from(notifBellBtns).some((btn) => btn === e.target || btn.contains(e.target));
+                if (!notifDrawer.contains(e.target) && !clickedBell) {
+                    notifDrawer.classList.add('hidden');
+                }
+            });
+        }
+
+        const notificationItems = {{ notifications_items|tojson }};
+        const shouldNotify = {{ 'true' if notifications_enabled else 'false' }} === 'true';
+        if (shouldNotify && 'Notification' in window && notificationItems.length) {
+            const dueItems = notificationItems.filter(item => {
+                const when = new Date(item.at_text.replace(' ', 'T'));
+                const now = new Date();
+                return (when - now) <= 5 * 60 * 1000 && (when - now) >= -5 * 60 * 1000;
+            });
+            if (dueItems.length) {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission();
+                } else if (Notification.permission === 'granted') {
+                    dueItems.slice(0, 2).forEach(item => {
+                        new Notification(item.title, { body: item.message });
+                    });
+                }
+            }
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
