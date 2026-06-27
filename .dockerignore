@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.db
+.venv/
+.git/
+.vscode/
+data/
+static/uploads/

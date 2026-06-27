@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    container_name: life-tracker
+    restart: unless-stopped
+    ports:
+      - "80:8000"
+    environment:
+      DATABASE_PATH: /data/lifetracker.db
+      UPLOAD_FOLDER: /data/uploads
+      SECRET_KEY: change-me-in-production
+      FLASK_DEBUG: "false"
+    volumes:
+      - ./data:/data

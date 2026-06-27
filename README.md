@@ -213,35 +213,64 @@ py
 **Port 5000 already in use?**
 - Change port in `app.py`: `app.run(port=5001)`
 
-## Deploy On Render (No Local Server Needed)
+## Deploy Free On Oracle Cloud (Always Free)
 
-This project is now set up for Render with persistent storage.
+This is the recommended no-monthly-cost setup for this project.
 
-### What was added
-- `render.yaml` for one-click Render service setup
-- `gunicorn` in `requirements.txt`
-- Environment-driven settings for database and uploads:
-    - `DATABASE_PATH`
-    - `UPLOAD_FOLDER`
-    - `SECRET_KEY`
+### What this uses
+- Oracle Always Free VM (Ubuntu)
+- Docker + Docker Compose
+- Persistent local storage on the VM (`./data`)
 
-### Deploy steps
-1. Push this repository to GitHub.
-2. In Render, choose **New +** -> **Blueprint**.
-3. Connect your repo and select this project.
-4. Render will detect `render.yaml` and create the web service + disk.
-5. Click **Apply** / **Create**.
-6. Wait for deploy to finish, then open your Render URL.
+### Files already prepared in this repo
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
+
+### One-time Oracle VM setup (run on VM via SSH)
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-plugin git
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker $USER
+```
+
+Log out and back in once after running `usermod`.
+
+### Deploy app on Oracle VM
+```bash
+git clone https://github.com/sheikhruslan/streamline.git
+cd streamline
+mkdir -p data/uploads
+docker compose up -d --build
+```
+
+### Open firewall on Oracle side
+In Oracle Cloud dashboard, add ingress rule:
+- TCP port `80` from `0.0.0.0/0`
+
+If UFW is enabled on the VM:
+```bash
+sudo ufw allow 80/tcp
+```
+
+### Update the app later
+```bash
+cd streamline
+git pull
+docker compose up -d --build
+```
 
 ### Sync across phone and laptop
-Once deployed, both devices use the same online backend and database.
-- Any update from iPhone appears on desktop
-- Any update from desktop appears on iPhone
+Once live, both devices use the same hosted URL and shared database on the VM.
+- Changes on iPhone appear on laptop
+- Changes on laptop appear on iPhone
 
 ### iPhone app-like install
-1. Open your Render URL in Safari.
+1. Open your Oracle server URL in Safari.
 2. Tap Share -> Add to Home Screen.
-3. Launch from your home screen like an app.
+3. Launch from home screen like an app.
 
 ## 📝 Future Enhancements (DIY)
 
