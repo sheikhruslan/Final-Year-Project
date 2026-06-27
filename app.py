@@ -102,9 +102,14 @@ def restore_table_rows(conn, table_name, rows):
 def ensure_todos_parent_column(conn):
     cols = {row['name'] for row in conn.execute('PRAGMA table_info(todos)').fetchall()}
     if 'parent_todo_id' not in cols:
-        conn.execute('ALTER TABLE todos ADD COLUMN parent_todo_id INTEGER')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_todos_parent_todo_id ON todos(parent_todo_id)')
-        conn.commit()
+        try:
+            conn.execute('ALTER TABLE todos ADD COLUMN parent_todo_id INTEGER')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_todos_parent_todo_id ON todos(parent_todo_id)')
+            conn.commit()
+        except Exception:
+            conn.rollback()
+    cols = {row['name'] for row in conn.execute('PRAGMA table_info(todos)').fetchall()}
+    return 'parent_todo_id' in cols
 
 
 def build_todo_tree(rows):
@@ -2312,7 +2317,7 @@ def jobs_add():
 @app.route('/todos')
 def todos():
     conn = get_db()
-    ensure_todos_parent_column(conn)
+    has_parent_column = ensure_todos_parent_column(conn)
     today = date.today().isoformat()
     filt = request.args.get('filter', 'all')
     sort = request.args.get('sort', 'priority')
@@ -2342,7 +2347,10 @@ def todos():
     completed = conn.execute('SELECT * FROM todos WHERE status="completed" AND (date(completed_at) >= ? OR completed_at IS NULL) ORDER BY completed_at DESC LIMIT 60', (cutoff_date,)).fetchall()
     edit_todo = conn.execute('SELECT * FROM todos WHERE id=?', (edit_todo_id,)).fetchone() if edit_todo_id else None
 
-    pending = build_todo_tree(pending_rows)
+    if not has_parent_column:
+        pending = [dict(r) | {'children': []} for r in pending_rows]
+    else:
+        pending = build_todo_tree(pending_rows)
     parent_options = flatten_todo_tree(pending)
 
     conn.close()
@@ -2390,7 +2398,7 @@ def shopping_delete(item_id):
 def todos_add():
     d = request.form
     conn = get_db()
-    ensure_todos_parent_column(conn)
+    has_parent_column = ensure_todos_parent_column(conn)
     parent_todo_id = int(d.get('parent_todo_id')) if d.get('parent_todo_id') else None
     todo_id = int(d.get('todo_id')) if d.get('todo_id') else None
 
@@ -2400,7 +2408,7 @@ def todos_add():
         return redirect(url_for('todos'))
 
     if todo_id and parent_todo_id:
-        rel_rows = conn.execute('SELECT id, parent_todo_id FROM todos').fetchall()
+        rel_rows = conn.execute('SELECT id, parent_todo_id FROM todos').fetchall() if has_parent_column else []
         parent_lookup = {row['id']: row['parent_todo_id'] for row in rel_rows}
         cursor = parent_todo_id
         while cursor:
@@ -2410,13 +2418,25 @@ def todos_add():
                 return redirect(url_for('todos'))
             cursor = parent_lookup.get(cursor)
 
-    if d.get('todo_id'):
-        conn.execute('UPDATE todos SET title=?, description=?, priority=?, due_date=?, due_time=?, category=?, parent_todo_id=? WHERE id=?',
-            (d['title'], d.get('description'), d.get('priority','medium'), d.get('due_date') or None, d.get('due_time') or None, d.get('category'), parent_todo_id, d['todo_id']))
-    else:
-        conn.execute('INSERT INTO todos (title,description,priority,due_date,due_time,category,parent_todo_id) VALUES (?,?,?,?,?,?,?)',
-            (d['title'], d.get('description'), d.get('priority','medium'), d.get('due_date') or None, d.get('due_time') or None, d.get('category'), parent_todo_id))
-    conn.commit()
+    try:
+        if d.get('todo_id'):
+            if has_parent_column:
+                conn.execute('UPDATE todos SET title=?, description=?, priority=?, due_date=?, due_time=?, category=?, parent_todo_id=? WHERE id=?',
+                    (d['title'], d.get('description'), d.get('priority','medium'), d.get('due_date') or None, d.get('due_time') or None, d.get('category'), parent_todo_id, d['todo_id']))
+            else:
+                conn.execute('UPDATE todos SET title=?, description=?, priority=?, due_date=?, due_time=?, category=? WHERE id=?',
+                    (d['title'], d.get('description'), d.get('priority','medium'), d.get('due_date') or None, d.get('due_time') or None, d.get('category'), d['todo_id']))
+        else:
+            if has_parent_column:
+                conn.execute('INSERT INTO todos (title,description,priority,due_date,due_time,category,parent_todo_id) VALUES (?,?,?,?,?,?,?)',
+                    (d['title'], d.get('description'), d.get('priority','medium'), d.get('due_date') or None, d.get('due_time') or None, d.get('category'), parent_todo_id))
+            else:
+                conn.execute('INSERT INTO todos (title,description,priority,due_date,due_time,category) VALUES (?,?,?,?,?,?)',
+                    (d['title'], d.get('description'), d.get('priority','medium'), d.get('due_date') or None, d.get('due_time') or None, d.get('category')))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        flash('Could not save task right now. Please try again.', 'error')
     conn.close()
     return redirect(url_for('todos'))
 
@@ -2439,18 +2459,21 @@ def todos_reopen(tid):
 @app.route('/todos/delete/<int:tid>', methods=['POST'])
 def todos_delete(tid):
     conn = get_db()
-    ensure_todos_parent_column(conn)
-    conn.execute('''
-        WITH RECURSIVE todo_tree(id) AS (
-            SELECT ?
-            UNION ALL
-            SELECT t.id
-            FROM todos t
-            JOIN todo_tree tt ON t.parent_todo_id = tt.id
-        )
-        DELETE FROM todos
-        WHERE id IN (SELECT id FROM todo_tree)
-    ''', (tid,))
+    has_parent_column = ensure_todos_parent_column(conn)
+    if has_parent_column:
+        conn.execute('''
+            WITH RECURSIVE todo_tree(id) AS (
+                SELECT ?
+                UNION ALL
+                SELECT t.id
+                FROM todos t
+                JOIN todo_tree tt ON t.parent_todo_id = tt.id
+            )
+            DELETE FROM todos
+            WHERE id IN (SELECT id FROM todo_tree)
+        ''', (tid,))
+    else:
+        conn.execute('DELETE FROM todos WHERE id=?', (tid,))
     conn.commit()
     conn.close()
     return redirect(url_for('todos'))
