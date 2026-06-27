@@ -32,25 +32,50 @@
     {% if pending %}
     <div class="space-y-2">
         {% for t in pending %}
-        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm flex items-center gap-3 border-l-4 {% if t.priority == 'high' %}border-red-500{% elif t.priority == 'medium' %}border-yellow-500{% else %}border-green-500{% endif %}">
-            <form action="/todos/complete/{{ t.id }}" method="POST">
-                <button class="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:bg-green-500 hover:border-green-500 flex items-center justify-center text-transparent hover:text-white text-xs transition-all">✓</button>
-            </form>
-            <div class="flex-1">
-                <div class="font-medium text-sm">{{ t.title }}</div>
-                {% if t.description %}<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ t.description }}</div>{% endif %}
-            </div>
-            <div class="flex items-center gap-2 text-xs">
-                {% if t.due_date %}
-                <span class="{% if t.due_date < today %}text-red-500{% else %}text-gray-500 dark:text-gray-400{% endif %}">{{ t.due_date }}</span>
-                {% endif %}
-                {% if t.due_time %}<span class="text-gray-400">{{ t.due_time }}</span>{% endif %}
-                {% if t.category %}<span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{{ t.category }}</span>{% endif %}
-                <button type="button" onclick="openTodoModal({{ t.id|tojson }}, {{ t.title|tojson }}, {{ (t.description or '')|tojson }}, {{ t.priority|tojson }}, {{ (t.category or '')|tojson }}, {{ (t.due_date or '')|tojson }}, {{ (t.due_time or '')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
-                <form action="/todos/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete?')">
-                    <button class="text-gray-400 hover:text-red-500">🗑️</button>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border-l-4 {% if t.priority == 'high' %}border-red-500{% elif t.priority == 'medium' %}border-yellow-500{% else %}border-green-500{% endif %}">
+            <div class="flex items-center gap-3">
+                <form action="/todos/complete/{{ t.id }}" method="POST">
+                    <button class="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:bg-green-500 hover:border-green-500 flex items-center justify-center text-transparent hover:text-white text-xs transition-all">✓</button>
                 </form>
+                <div class="flex-1">
+                    <div class="font-medium text-sm">{{ t.title }}</div>
+                    {% if t.description %}<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ t.description }}</div>{% endif %}
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    {% if t.due_date %}
+                    <span class="{% if t.due_date < today %}text-red-500{% else %}text-gray-500 dark:text-gray-400{% endif %}">{{ t.due_date }}</span>
+                    {% endif %}
+                    {% if t.due_time %}<span class="text-gray-400">{{ t.due_time }}</span>{% endif %}
+                    {% if t.category %}<span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{{ t.category }}</span>{% endif %}
+                    <button type="button" onclick="openTodoModal({{ t.id|tojson }}, {{ t.title|tojson }}, {{ (t.description or '')|tojson }}, {{ t.priority|tojson }}, {{ (t.category or '')|tojson }}, {{ (t.due_date or '')|tojson }}, {{ (t.due_time or '')|tojson }}, {{ (t.parent_todo_id or '')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
+                    <button type="button" onclick="openTodoModal('', '', '', 'medium', {{ (t.category or '')|tojson }}, '', '', {{ t.id|tojson }})" class="text-indigo-600 dark:text-indigo-400">+ Subtask</button>
+                    <form action="/todos/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete this task and its subtasks?')">
+                        <button class="text-gray-400 hover:text-red-500">🗑️</button>
+                    </form>
+                </div>
             </div>
+
+            {% if child_map[t.id] %}
+            <div class="mt-3 pl-9 space-y-2 border-l border-gray-100 dark:border-gray-700">
+                {% for sub in child_map[t.id] %}
+                <div class="flex items-center gap-2 text-sm py-1">
+                    <form action="/todos/complete/{{ sub.id }}" method="POST">
+                        <button class="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:bg-green-500 hover:border-green-500 flex items-center justify-center text-transparent hover:text-white text-[10px] transition-all">✓</button>
+                    </form>
+                    <div class="flex-1">
+                        <div>{{ sub.title }}</div>
+                        {% if sub.description %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ sub.description }}</div>{% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <button type="button" onclick="openTodoModal({{ sub.id|tojson }}, {{ sub.title|tojson }}, {{ (sub.description or '')|tojson }}, {{ sub.priority|tojson }}, {{ (sub.category or '')|tojson }}, {{ (sub.due_date or '')|tojson }}, {{ (sub.due_time or '')|tojson }}, {{ (sub.parent_todo_id or '')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
+                        <form action="/todos/delete/{{ sub.id }}" method="POST" onsubmit="return confirm('Delete subtask?')">
+                            <button class="text-gray-400 hover:text-red-500">🗑️</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -81,6 +106,15 @@
         <h3 id="todoModalTitle" class="text-lg font-bold mb-4">Add Task</h3>
         <form action="/todos/add" method="POST" class="space-y-3">
             <input type="hidden" name="todo_id" id="todo_id">
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Parent Task (optional)</label>
+                <select name="parent_todo_id" id="todo_parent_id" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    <option value="">None (main task)</option>
+                    {% for parent in root_parents %}
+                    <option value="{{ parent.id }}">{{ parent.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <input type="text" name="title" id="todo_title" required placeholder="Task title" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
             <textarea name="description" id="todo_description" placeholder="Description" rows="2" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
             <div class="grid grid-cols-2 gap-2">
@@ -106,10 +140,11 @@
 {% block scripts %}
 <script>
 const today = '{{ today if today is defined else "" }}';
-function openTodoModal(id='', title='', description='', priority='medium', category='', dueDate='', dueTime='') {
+function openTodoModal(id='', title='', description='', priority='medium', category='', dueDate='', dueTime='', parentId='') {
     document.getElementById('todoModalTitle').textContent = id ? 'Edit Task' : 'Add Task';
     document.getElementById('todoSubmitBtn').textContent = id ? 'Update' : 'Add';
     document.getElementById('todo_id').value = id || '';
+    document.getElementById('todo_parent_id').value = parentId || '';
     document.getElementById('todo_title').value = title || '';
     document.getElementById('todo_description').value = description || '';
     document.getElementById('todo_priority').value = priority || 'medium';
@@ -120,7 +155,7 @@ function openTodoModal(id='', title='', description='', priority='medium', categ
 }
 
 {% if edit_todo %}
-openTodoModal({{ edit_todo.id }}, {{ edit_todo.title|tojson }}, {{ (edit_todo.description or '')|tojson }}, {{ edit_todo.priority|tojson }}, {{ (edit_todo.category or '')|tojson }}, {{ (edit_todo.due_date or '')|tojson }}, {{ (edit_todo.due_time or '')|tojson }});
+openTodoModal({{ edit_todo.id }}, {{ edit_todo.title|tojson }}, {{ (edit_todo.description or '')|tojson }}, {{ edit_todo.priority|tojson }}, {{ (edit_todo.category or '')|tojson }}, {{ (edit_todo.due_date or '')|tojson }}, {{ (edit_todo.due_time or '')|tojson }}, {{ (edit_todo.parent_todo_id or '')|tojson }});
 {% endif %}
 </script>
 {% endblock %}

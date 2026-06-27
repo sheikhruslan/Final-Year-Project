@@ -225,6 +225,10 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         completed_at TIMESTAMP
     )''')
+    todo_columns = {row[1] for row in c.execute("PRAGMA table_info(todos)").fetchall()}
+    if 'parent_todo_id' not in todo_columns:
+        c.execute('ALTER TABLE todos ADD COLUMN parent_todo_id INTEGER')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_todos_parent_todo_id ON todos(parent_todo_id)')
 
     c.execute('''CREATE TABLE IF NOT EXISTS routines (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
