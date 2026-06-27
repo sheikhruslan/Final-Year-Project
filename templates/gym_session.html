@@ -25,7 +25,13 @@
 
         {% if workout_type.is_cardio %}
         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-sm">
-            {% if workout_type.name == 'Outdoor Run' %}
+            {% if workout_type.name == 'HIIT Cardio' %}
+            <div class="font-medium text-blue-700 dark:text-blue-300">Outdoor sprint interval mode</div>
+            <div class="text-blue-600 dark:text-blue-400 mt-1">
+                Log each sprint round using sprint seconds and rest seconds. Total duration includes both work and recovery.
+                {% if latest_weight %}Calorie estimate uses your latest weight of {{ latest_weight.weight_kg }}kg.{% else %}Log your weight on the gym page to improve calorie estimates.{% endif %}
+            </div>
+            {% elif workout_type.name == 'Outdoor Run' %}
             <div class="font-medium text-blue-700 dark:text-blue-300">Outdoor run mode</div>
             <div class="text-blue-600 dark:text-blue-400 mt-1">
                 Log elapsed time, distance, and avg pace. Calories estimated at ~1.04 kcal per kg per km.
@@ -92,7 +98,28 @@
             <input type="hidden" name="exercise_id" value="{{ ex.id }}">
 
             {% if workout_type.is_cardio %}
-            {% if workout_type.name == 'Outdoor Run' %}
+            {% if workout_type.name == 'HIIT Cardio' %}
+            <div class="flex items-center justify-between mb-3 text-xs text-gray-500 dark:text-gray-400">
+                <span>Sprint and rest per round</span>
+                <span id="exercise-calories-{{ ex.id }}">0.0 kcal</span>
+            </div>
+            <div class="space-y-2" id="sets-{{ ex.id }}" data-cardio-mode="hiit">
+                <div class="grid grid-cols-5 gap-2 text-xs text-gray-500 dark:text-gray-400 font-semibold px-1">
+                    <div>Round</div><div>Sprint (sec)</div><div>Rest (sec)</div><div>Total</div><div>Kcal</div>
+                </div>
+                <div class="interval-row hiit-row grid grid-cols-5 gap-2 items-center">
+                    <input type="hidden" name="set_num_{{ ex.id }}" value="1">
+                    <input type="hidden" name="set_type_{{ ex.id }}" value="interval">
+                    <div class="text-sm font-medium text-center">1</div>
+                    <input type="number" name="time_{{ ex.id }}" placeholder="sec" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    <input type="number" name="incline_{{ ex.id }}" placeholder="sec" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    <div class="text-xs text-gray-500 dark:text-gray-400 interval-total">0s</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 interval-calories">0.0</div>
+                </div>
+            </div>
+            <button type="button" onclick="addInterval({{ ex.id }})" class="mt-2 text-blue-600 dark:text-blue-400 text-xs hover:underline">+ Add Another Round</button>
+
+            {% elif workout_type.name == 'Outdoor Run' %}
             <!-- OUTDOOR RUN: elapsed time, distance, auto-calculated pace -->
             <div class="space-y-4" id="sets-{{ ex.id }}">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -124,11 +151,11 @@
                 <span>Treadmill settings per interval</span>
                 <span id="exercise-calories-{{ ex.id }}">0.0 kcal</span>
             </div>
-            <div class="space-y-2 overflow-x-auto" id="sets-{{ ex.id }}">
+            <div class="space-y-2" id="sets-{{ ex.id }}">
                 <div class="grid grid-cols-5 gap-2 text-xs text-gray-500 dark:text-gray-400 font-semibold px-1">
                     <div>Interval</div><div>Speed (km/h)</div><div>Incline (%)</div><div>Time (sec)</div><div>Kcal</div>
                 </div>
-                <div class="interval-row grid grid-cols-5 gap-2 items-center min-w-[620px]">
+                <div class="interval-row grid grid-cols-5 gap-2 items-center">
                     <input type="hidden" name="set_num_{{ ex.id }}" value="1">
                     <input type="hidden" name="set_type_{{ ex.id }}" value="interval">
                     <div class="text-sm font-medium text-center">1</div>
@@ -143,12 +170,12 @@
 
             {% else %}
             <!-- STRENGTH: 1 warmup + 2 working sets -->
-            <div class="space-y-2 overflow-x-auto" id="sets-{{ ex.id }}">
-                <div class="grid grid-cols-5 gap-2 text-xs text-gray-500 dark:text-gray-400 font-semibold px-1 min-w-[620px]">
+            <div class="space-y-2" id="sets-{{ ex.id }}">
+                <div class="grid grid-cols-5 gap-2 text-xs text-gray-500 dark:text-gray-400 font-semibold px-1">
                     <div>Set</div><div>Type</div><div>Reps</div><div>Weight (kg)</div><div></div>
                 </div>
                 <!-- Warmup Set -->
-                <div class="grid grid-cols-5 gap-2 items-center min-w-[620px]">
+                <div class="grid grid-cols-5 gap-2 items-center">
                     <input type="hidden" name="set_num_{{ ex.id }}" value="1">
                     <input type="hidden" name="set_type_{{ ex.id }}" value="warmup">
                     <div class="text-sm font-medium text-center">1</div>
@@ -158,7 +185,7 @@
                     <div></div>
                 </div>
                 <!-- Working Set 1 -->
-                <div class="grid grid-cols-5 gap-2 items-center min-w-[620px]">
+                <div class="grid grid-cols-5 gap-2 items-center">
                     <input type="hidden" name="set_num_{{ ex.id }}" value="2">
                     <input type="hidden" name="set_type_{{ ex.id }}" value="working">
                     <div class="text-sm font-medium text-center">2</div>
@@ -168,7 +195,7 @@
                     <div></div>
                 </div>
                 <!-- Working Set 2 -->
-                <div class="grid grid-cols-5 gap-2 items-center min-w-[620px]">
+                <div class="grid grid-cols-5 gap-2 items-center">
                     <input type="hidden" name="set_num_{{ ex.id }}" value="3">
                     <input type="hidden" name="set_type_{{ ex.id }}" value="working">
                     <div class="text-sm font-medium text-center">3</div>
@@ -226,11 +253,27 @@ function refreshCardioEstimates(eid) {
     const container = document.getElementById('sets-' + eid);
     const rows = container.querySelectorAll('.interval-row');
     let total = 0;
+    const isHiit = container?.dataset.cardioMode === 'hiit';
     rows.forEach((row) => {
-        const speed = row.querySelector(`input[name=\"speed_${eid}\"]`)?.value;
-        const incline = row.querySelector(`input[name=\"incline_${eid}\"]`)?.value;
         const timeSeconds = row.querySelector(`input[name=\"time_${eid}\"]`)?.value;
-        const calories = estimateTreadmillCalories(speed, incline, timeSeconds);
+        let calories = 0;
+        if (isHiit) {
+            const restSeconds = row.querySelector(`input[name=\"incline_${eid}\"]`)?.value;
+            const sprint = Number(timeSeconds || 0);
+            const rest = Number(restSeconds || 0);
+            const roundTotal = sprint + rest;
+            row.querySelector('.interval-total').textContent = `${roundTotal}s`;
+            if (cardioProfile.weight) {
+                const sprintMinutes = sprint / 60;
+                const restMinutes = rest / 60;
+                const caloriesPerMinute = (3.5 * Number(cardioProfile.weight)) / 200;
+                calories = ((11.0 * sprintMinutes) + (1.8 * restMinutes)) * caloriesPerMinute;
+            }
+        } else {
+            const speed = row.querySelector(`input[name=\"speed_${eid}\"]`)?.value;
+            const incline = row.querySelector(`input[name=\"incline_${eid}\"]`)?.value;
+            calories = estimateTreadmillCalories(speed, incline, timeSeconds);
+        }
         total += calories;
         row.querySelector('.interval-calories').textContent = calories.toFixed(1);
     });
@@ -242,7 +285,7 @@ function addSet(eid) {
     const container = document.getElementById('sets-'+eid);
     const rows = container.querySelectorAll('.grid.items-center, .grid:not(.text-xs)');
     const num = rows.length;
-    const html = `<div class="grid grid-cols-5 gap-2 items-center min-w-[620px]">
+    const html = `<div class="grid grid-cols-5 gap-2 items-center">
         <input type="hidden" name="set_num_${eid}" value="${num+1}">
         <input type="hidden" name="set_type_${eid}" value="working">
         <div class="text-sm font-medium text-center">${num+1}</div>
@@ -285,7 +328,18 @@ function addInterval(eid) {
     const container = document.getElementById('sets-'+eid);
     const rows = container.querySelectorAll('.interval-row');
     const num = rows.length + 1;
-    const html = `<div class="interval-row grid grid-cols-5 gap-2 items-center min-w-[620px]">
+    const isHiit = container?.dataset.cardioMode === 'hiit';
+    const html = isHiit
+        ? `<div class="interval-row hiit-row grid grid-cols-5 gap-2 items-center">
+        <input type="hidden" name="set_num_${eid}" value="${num}">
+        <input type="hidden" name="set_type_${eid}" value="interval">
+        <div class="text-sm font-medium text-center">${num}</div>
+        <input type="number" name="time_${eid}" placeholder="sec" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+        <input type="number" name="incline_${eid}" placeholder="sec" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+        <div class="text-xs text-gray-500 dark:text-gray-400 interval-total">0s</div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 interval-calories">0.0</div>
+    </div>`
+        : `<div class="interval-row grid grid-cols-5 gap-2 items-center">
         <input type="hidden" name="set_num_${eid}" value="${num}">
         <input type="hidden" name="set_type_${eid}" value="interval">
         <div class="text-sm font-medium text-center">${num}</div>

@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Habits{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">✅ Habits</h1>
+        <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add Habit</button>
+    </div>
+    {% if habits %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-200 dark:border-gray-700">
+                    <th class="text-left py-3 px-4 font-semibold min-w-[180px]">Habit</th>
+                    <th class="text-center py-3 px-2 font-semibold w-16">🔥</th>
+                    {% for d in date_range %}
+                    <th class="text-center py-3 px-1 text-[11px] text-gray-500 dark:text-gray-400 min-w-[48px]">{{ d[5:] }}</th>
+                    {% endfor %}
+                    <th class="text-center py-3 px-3 font-semibold min-w-[120px]">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set group = namespace(current='') %}
+                {% for habit in habits %}
+                {% if group.current != habit.category %}
+                <tr class="bg-gray-50 dark:bg-gray-900/50 border-y border-gray-200 dark:border-gray-700">
+                    <td colspan="{{ date_range|length + 3 }}" class="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">{{ habit.category }}</td>
+                </tr>
+                {% set group.current = habit.category %}
+                {% endif %}
+                <tr class="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="py-2.5 px-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full" style="background:{{ habit.color }}"></span>
+                            <div>
+                                <div class="font-medium">{{ habit.name }}</div>
+                                {% if habit.description %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ habit.description }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center py-2.5 px-2">
+                        <span class="font-bold text-orange-500">{{ habit_streaks.get(habit.id, 0) }}</span>
+                    </td>
+                    {% for d in date_range %}
+                    <td class="text-center py-2.5 px-1">
+                        <button onclick="toggleHabit({{ habit.id }}, '{{ d }}')" id="h-{{ habit.id }}-{{ d }}"
+                            class="w-7 h-7 rounded-md text-xs font-bold transition-all
+                            {% if habit_logs.get(habit.id, {}).get(d) %}
+                            bg-green-500 text-white shadow-sm
+                            {% else %}
+                            bg-gray-100 dark:bg-gray-700 text-gray-300 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600
+                            {% endif %}">
+                            {% if habit_logs.get(habit.id, {}).get(d) %}✓{% endif %}
+                        </button>
+                    </td>
+                    {% endfor %}
+                    <td class="py-2.5 px-3">
+                        <div class="flex items-center justify-center gap-2">
+                            <button type="button" data-id="{{ habit.id }}" data-name="{{ habit.name|e }}" data-description="{{ (habit.description or '')|e }}" data-color="{{ habit.color }}" data-category="{{ (habit.category or 'General')|e }}" onclick="openEditHabit(this)" class="text-xs text-blue-600 hover:text-blue-800">Edit</button>
+                            <form action="/habits/delete/{{ habit.id }}" method="POST" onsubmit="return confirm('Delete this habit?')">
+                                <button class="text-xs text-red-500 hover:text-red-700">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-20 text-gray-400"><p>No habits yet. Add your first habit!</p></div>
+    {% endif %}
+</div>
+<!-- Add Modal -->
+<div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-bold mb-4">Add Habit</h3>
+        <form action="/habits/add" method="POST" class="space-y-3">
+            <input type="text" name="name" required placeholder="Habit name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="description" placeholder="Description (optional)" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="category" placeholder="Category (e.g. Health, Deen, Work)" value="General" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="color" name="color" value="#3b82f6" class="w-10 h-10 rounded cursor-pointer">
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Save</button>
+                <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="editModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-bold mb-4">Edit Habit</h3>
+        <form id="editHabitForm" method="POST" class="space-y-3">
+            <input type="text" name="name" id="editHabitName" required class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="description" id="editHabitDescription" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="category" id="editHabitCategory" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm" placeholder="Category">
+            <input type="color" name="color" id="editHabitColor" class="w-10 h-10 rounded cursor-pointer">
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Save</button>
+                <button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleHabit(hid, d) {
+    fetch('/habits/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({habit_id:hid, date:d})})
+    .then(r=>r.json()).then(()=>location.reload());
+}
+function openEditHabit(button) {
+    document.getElementById('editHabitForm').action = '/habits/edit/' + button.dataset.id;
+    document.getElementById('editHabitName').value = button.dataset.name;
+    document.getElementById('editHabitDescription').value = button.dataset.description;
+    document.getElementById('editHabitCategory').value = button.dataset.category || 'General';
+    document.getElementById('editHabitColor').value = button.dataset.color;
+    document.getElementById('editModal').classList.remove('hidden');
+}
+</script>
+{% endblock %}

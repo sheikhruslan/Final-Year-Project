@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Routines{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">🌙 Routines</h1>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    {% for rtype in ['morning', 'night'] %}
+    <div id="panel-{{ rtype }}" class="space-y-4">
+        {% if rtype == 'morning' %}{% set routine = morning %}{% set items = morning_items %}{% set completed = m_completed %}
+        {% else %}{% set routine = night %}{% set items = night_items %}{% set completed = n_completed %}{% endif %}
+        {% if routine %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-semibold">{{ rtype|capitalize }} Routine</h3>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ completed|length }}/{{ items|length }} done today</span>
+            </div>
+            <div class="space-y-2">
+                {% for item in items %}
+                <div class="flex items-center gap-3 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <button type="button" onclick="toggleItem({{ routine.id }}, {{ item.id }})" class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all {% if item.id in completed %}bg-green-500 border-green-500 text-white{% else %}border-gray-300 dark:border-gray-600 hover:border-green-400{% endif %}" id="check-{{ item.id }}">
+                        <span class="text-xs">{% if item.id in completed %}✓{% endif %}</span>
+                    </button>
+                    <span class="text-sm {% if item.id in completed %}line-through text-gray-400{% endif %}" id="label-{{ item.id }}">{{ item.item_text }}</span>
+                    <div class="ml-auto flex items-center gap-1">
+                        <form action="/routines/item/move" method="POST">
+                            <input type="hidden" name="item_id" value="{{ item.id }}">
+                            <input type="hidden" name="direction" value="up">
+                            <button class="text-gray-400 hover:text-blue-500 text-xs px-1" aria-label="Move up">↑</button>
+                        </form>
+                        <form action="/routines/item/move" method="POST">
+                            <input type="hidden" name="item_id" value="{{ item.id }}">
+                            <input type="hidden" name="direction" value="down">
+                            <button class="text-gray-400 hover:text-blue-500 text-xs px-1" aria-label="Move down">↓</button>
+                        </form>
+                        <form action="/routines/item/delete" method="POST" onsubmit="return confirm('Remove?')">
+                            <input type="hidden" name="item_id" value="{{ item.id }}">
+                            <button class="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <!-- Add Item -->
+            <form action="/routines/item/add" method="POST" class="mt-4 flex gap-2">
+                <input type="hidden" name="routine_id" value="{{ routine.id }}">
+                <input type="text" name="item_name" placeholder="Add item..." class="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-3 py-1.5 text-sm">
+                <button class="bg-blue-600 text-white px-3 py-1.5 rounded text-sm">Add</button>
+            </form>
+        </div>
+        {% else %}
+        <!-- Create Routine -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-sm text-center">
+            <p class="text-4xl mb-3">{% if rtype == 'morning' %}☀️{% else %}🌙{% endif %}</p>
+            <p class="text-gray-500 dark:text-gray-400 mb-4">Set up your {{ rtype }} routine</p>
+            <button onclick="document.getElementById('create-{{ rtype }}').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">Create {{ rtype|capitalize }} Routine</button>
+            <form id="create-{{ rtype }}" action="/routines/create" method="POST" class="hidden mt-4 text-left space-y-3">
+                <input type="hidden" name="routine_type" value="{{ rtype }}">
+                <input type="text" name="name" value="{{ rtype|capitalize }} Routine" placeholder="Routine name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <textarea name="items" rows="6" placeholder="One item per line, e.g.&#10;Brush teeth&#10;Wash face&#10;Read Quran" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
+                <button class="bg-green-600 text-white px-4 py-2 rounded text-sm w-full">Create</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const routineDate = '{{ today }}';
+function toggleItem(routineId, itemId) {
+    fetch('/routines/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({routine_id:routineId, item_id:itemId, log_date:routineDate})})
+    .then(r=>r.json()).then(d=>{
+        const btn = document.getElementById('check-'+itemId);
+        const label = document.getElementById('label-'+itemId);
+        if(d.is_completed){
+            btn.classList.add('bg-green-500','border-green-500','text-white');
+            btn.classList.remove('border-gray-300','dark:border-gray-600');
+            btn.querySelector('span').textContent='✓';
+            label.classList.add('line-through','text-gray-400');
+        } else {
+            btn.classList.remove('bg-green-500','border-green-500','text-white');
+            btn.classList.add('border-gray-300','dark:border-gray-600');
+            btn.querySelector('span').textContent='';
+            label.classList.remove('line-through','text-gray-400');
+        }
+    });
+}
+</script>
+{% endblock %}

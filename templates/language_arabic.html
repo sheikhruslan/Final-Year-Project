@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Arabic{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">🇸🇦 Arabic</h1>
+            <p class="text-sm text-gray-500">Clean program tracking with duplicate-safe progress.</p>
+        </div>
+        <a href="/language" class="text-sm px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-50">Back to Language</a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium">Overall Progress</span>
+            <span class="text-sm text-gray-600">{{ arabic_total_current }} / {{ arabic_total_target }} days</span>
+        </div>
+        <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700">
+            <div class="h-3 rounded-full bg-blue-500" style="width: {{ arabic_overall_pct }}%"></div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">{{ arabic_overall_pct }}% complete across all Arabic programs.</div>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-4">
+        {% for prog in arabic_programs %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+            <h3 class="font-semibold mb-3">{{ prog.label }}</h3>
+            <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+                <span>Progress</span>
+                <span>{{ prog.current_day }}/{{ prog.total_days }}</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 mb-2">
+                <div class="h-2 rounded-full bg-blue-500" style="width: {{ prog.progress_pct }}%"></div>
+            </div>
+            <div class="text-xs text-gray-500 mb-3">{{ prog.progress_pct }}% complete{% if prog.last_completed_date %} · last: {{ prog.last_completed_date }}{% endif %}</div>
+            <form action="/language/arabic/complete" method="POST">
+                <input type="hidden" name="program_name" value="{{ prog.program_name }}">
+                <button class="w-full py-2 rounded bg-blue-600 text-white text-sm">+1 Day Complete</button>
+            </form>
+        </div>
+        {% endfor %}
+        {% if not arabic_programs %}
+        <div class="col-span-full text-sm text-gray-500">No Arabic programs found.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

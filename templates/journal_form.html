@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if entry else 'New' }} {{ entry_type|title }} Journal{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        <a href="/journal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">← Back</a>
+        <h1 class="text-2xl font-bold">{% if entry_type == 'morning' %}🌅 Morning Journal{% else %}🌙 Night Journal{% endif %}</h1>
+    </div>
+    <form action="/journal/save" method="POST" class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm space-y-5">
+        {% if entry %}<input type="hidden" name="entry_id" value="{{ entry.id }}">{% endif %}
+        <input type="hidden" name="entry_type" value="{{ entry_type }}">
+        <div>
+            <label class="block text-sm font-semibold mb-2">Entry Date</label>
+            <input type="date" name="entry_date" value="{{ entry_date }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        {% if entry_type == 'morning' %}
+        <div>
+            <label class="block text-sm font-semibold mb-3">7 Things I'm Grateful For</label>
+            {% for i in range(1,8) %}
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-sm text-gray-400 w-5">{{ i }}.</span>
+                <input type="text" name="gratitude_{{ i }}" value="{{ entry['gratitude_' ~ i] if entry else '' }}" class="flex-1 bg-transparent border-b border-gray-200 dark:border-gray-700 py-1 text-sm focus:outline-none focus:border-blue-500" placeholder="I'm grateful for...">
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% if entry_type == 'morning' %}Intentions for today{% else %}Reflection{% endif %}</label>
+            <textarea name="content" rows="5" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">{{ entry.content if entry else '' }}</textarea>
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">Mood</label>
+            <div class="flex gap-3">
+                {% for m, emoji in [(1,'😢'),(2,'😔'),(3,'😐'),(4,'🙂'),(5,'😄')] %}
+                <label class="cursor-pointer">
+                    <input type="radio" name="mood" value="{{ m }}" class="hidden peer" {% if entry and entry.mood == m %}checked{% endif %}>
+                    <span class="text-3xl opacity-40 peer-checked:opacity-100 hover:opacity-80 transition-opacity">{{ emoji }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">Tags <span class="font-normal text-gray-400">(comma separated)</span></label>
+            <input type="text" name="tags" value="{{ entry.tags if entry else '' }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-medium text-sm">Save Entry</button>
+    </form>
+</div>
+{% endblock %}

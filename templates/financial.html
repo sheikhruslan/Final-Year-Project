@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% block title %}Financial{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">💰 Financial</h1>
+        <div class="flex items-center gap-2">
+            <form method="GET" action="/financial">
+                <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-2">
+                    {% for value in [14, 30, 90, 180, 365] %}
+                    <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d history</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <button onclick="openTxnModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add</button>
+        </div>
+    </div>
+    <div class="grid grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+            <div class="text-xl font-bold text-green-600">{{ currency }}{{ '%.2f'|format(income_total|default(0)) }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Income</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+            <div class="text-xl font-bold text-red-600">{{ currency }}{{ '%.2f'|format(expense_total|default(0)) }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Expenses</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+            <div class="text-xl font-bold {% if income_total - expense_total >= 0 %}text-blue-600{% else %}text-red-600{% endif %}">{{ currency }}{{ '%.2f'|format((income_total|default(0)) - (expense_total|default(0))) }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Balance</div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <h2 class="font-semibold">Money Visualizations</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Track money trend and spending breakdown by period.</p>
+            </div>
+            <div class="flex items-end gap-2 text-sm">
+                <div>
+                    <label for="financePeriod" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Period</label>
+                    <select id="financePeriod" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <option value="week">Past Week (Mon-Sun)</option>
+                        <option value="month" selected>Certain Month</option>
+                        <option value="overall">Overall</option>
+                    </select>
+                </div>
+                <div id="financeMonthWrap">
+                    <label for="financeMonth" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Month</label>
+                    <input type="month" id="financeMonth" value="{{ today[:7] }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                </div>
+            </div>
+        </div>
+        <div id="financePeriodMeta" class="text-xs text-gray-500 dark:text-gray-400"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="border border-gray-100 dark:border-gray-700 rounded-lg p-3">
+                <h3 class="text-sm font-semibold mb-2">Money Over Time</h3>
+                <canvas id="moneyLineChart" height="180"></canvas>
+            </div>
+            <div class="border border-gray-100 dark:border-gray-700 rounded-lg p-3">
+                <h3 class="text-sm font-semibold mb-2">Spending Breakdown</h3>
+                <div class="max-h-[220px] mx-auto" style="max-width: 280px;">
+                    <canvas id="spendPieChart" height="140"></canvas>
+                </div>
+            </div>
+        </div>
+        <div id="financeNoData" class="hidden text-sm text-gray-500 dark:text-gray-400">No transactions in this period yet.</div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Expected Cash</h2>
+            <form action="/financial/expected/add" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-sm">
+                <input type="text" name="source" required placeholder="Source" class="md:col-span-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="number" name="amount" step="0.01" required placeholder="Amount" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="date" name="expected_date" value="{{ today }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="text" name="notes" placeholder="Notes" class="md:col-span-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="bg-blue-600 text-white rounded p-2">Add</button>
+            </form>
+            <div class="space-y-2">
+                {% for item in expected_cash %}
+                <div class="flex items-center justify-between rounded-lg border border-gray-100 dark:border-gray-700 p-3 text-sm">
+                    <div>
+                        <div class="font-medium">{{ item.source }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ currency }}{{ '%.2f'|format(item.amount) }}{% if item.expected_date %} · {{ item.expected_date }}{% endif %}</div>
+                    </div>
+                    <form action="/financial/expected/toggle/{{ item.id }}" method="POST">
+                        <button class="px-3 py-1 rounded text-xs {% if item.is_received %}bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400{% else %}bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300{% endif %}">{% if item.is_received %}Received{% else %}Pending{% endif %}</button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-400">No expected cash added yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Savings</h2>
+            <form action="/financial/savings/add" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-sm">
+                <input type="text" name="name" required placeholder="Goal" class="md:col-span-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="number" name="target_amount" step="0.01" required placeholder="Target" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="number" name="current_amount" step="0.01" placeholder="Current" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="date" name="deadline" class="md:col-span-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="bg-blue-600 text-white rounded p-2">Add</button>
+            </form>
+            <div class="space-y-3">
+                {% for goal in savings_goals %}
+                <div class="rounded-lg border border-gray-100 dark:border-gray-700 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="font-medium text-sm">{{ goal.name }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ currency }}{{ '%.2f'|format(goal.current_amount) }} / {{ currency }}{{ '%.2f'|format(goal.target_amount) }}</div>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
+                        <div class="bg-green-500 h-2 rounded-full" style="width: {{ ((goal.current_amount / goal.target_amount) * 100) if goal.target_amount else 0 }}%"></div>
+                    </div>
+                    <form action="/financial/savings/contribute/{{ goal.id }}" method="POST" class="flex gap-2 text-sm">
+                        <input type="number" name="amount" step="0.01" placeholder="Add amount" class="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <button class="bg-green-600 text-white px-3 rounded">Save</button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-400">No savings goals yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {% if transactions %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+            <thead><tr class="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                <th class="text-left p-3">Date</th><th class="text-left p-3">Description</th><th class="text-left p-3">Category</th><th class="text-right p-3">Amount</th><th class="text-left p-3">Actions</th>
+            </tr></thead>
+            <tbody>
+            {% for t in transactions %}
+            <tr class="border-b border-gray-50 dark:border-gray-700/50">
+                <td class="p-3 text-gray-500">{{ t.transaction_date }}</td>
+                <td class="p-3">{{ t.description }}</td>
+                <td class="p-3 text-gray-500">{{ t.cat_name or '-' }}</td>
+                <td class="p-3 text-right font-medium {% if t.type == 'income' %}text-green-600{% else %}text-red-600{% endif %}">{% if t.type == 'income' %}+{% else %}-{% endif %}{{ currency }}{{ t.amount }}</td>
+                <td class="p-3">
+                    <div class="flex gap-2 text-xs">
+                        <button type="button" onclick="openTxnModal({{ t.id }}, {{ t.type|tojson }}, {{ t.amount }}, {{ t.description|tojson }}, {{ (t.category_id or '')|tojson }}, {{ t.transaction_date|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
+                        <form action="/financial/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete this transaction?')">
+                            <button class="text-red-500">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400"><p>No transactions yet</p></div>
+    {% endif %}
+</div>
+<!-- Add Modal -->
+<div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 id="txnModalTitle" class="text-lg font-bold mb-4">Add Transaction</h3>
+        <form action="/financial/add" method="POST" class="space-y-3">
+            <input type="hidden" name="transaction_id" id="txn_id">
+            <div class="flex gap-2">
+                <label class="flex-1"><input type="radio" name="type" value="expense" checked class="hidden peer" id="txn_type_expense"><div class="peer-checked:bg-red-100 dark:peer-checked:bg-red-900/30 peer-checked:border-red-500 border-2 border-gray-200 dark:border-gray-700 rounded-lg p-2 text-center text-sm cursor-pointer">Expense</div></label>
+                <label class="flex-1"><input type="radio" name="type" value="income" class="hidden peer" id="txn_type_income"><div class="peer-checked:bg-green-100 dark:peer-checked:bg-green-900/30 peer-checked:border-green-500 border-2 border-gray-200 dark:border-gray-700 rounded-lg p-2 text-center text-sm cursor-pointer">Income</div></label>
+            </div>
+            <input type="number" name="amount" id="txn_amount" step="0.01" required placeholder="Amount" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="description" id="txn_description" required placeholder="Description" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <select name="category_id" id="txn_category" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="">No category</option>
+                {% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }} ({{ cat.type }})</option>{% endfor %}
+            </select>
+            <input type="date" name="transaction_date" id="txn_date" value="{{ today }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <div class="flex gap-2">
+                <button id="txnSubmitBtn" type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Add</button>
+                <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function openTxnModal(id='', type='expense', amount='', description='', categoryId='', txnDate='{{ today }}') {
+    document.getElementById('txnModalTitle').textContent = id ? 'Edit Transaction' : 'Add Transaction';
+    document.getElementById('txnSubmitBtn').textContent = id ? 'Update' : 'Add';
+    document.getElementById('txn_id').value = id || '';
+    document.getElementById('txn_amount').value = amount || '';
+    document.getElementById('txn_description').value = description || '';
+    document.getElementById('txn_category').value = categoryId || '';
+    document.getElementById('txn_date').value = txnDate || '{{ today }}';
+    document.getElementById(type === 'income' ? 'txn_type_income' : 'txn_type_expense').checked = true;
+    document.getElementById('addModal').classList.remove('hidden');
+}
+
+{% if edit_txn %}
+openTxnModal({{ edit_txn.id }}, {{ edit_txn.type|tojson }}, {{ edit_txn.amount }}, {{ edit_txn.description|tojson }}, {{ (edit_txn.category_id or '')|tojson }}, {{ edit_txn.transaction_date|tojson }});
+{% endif %}
+
+const financeTransactions = {{ chart_transactions|tojson }};
+const financeCurrency = {{ currency|tojson }};
+let moneyLineChart;
+let spendPieChart;
+
+function getPastWeekRange() {
+    const today = new Date();
+    const currentWeekMonday = new Date(today);
+    const day = (today.getDay() + 6) % 7;
+    currentWeekMonday.setDate(today.getDate() - day);
+    const start = new Date(currentWeekMonday);
+    start.setDate(currentWeekMonday.getDate() - 7);
+    const end = new Date(currentWeekMonday);
+    end.setDate(currentWeekMonday.getDate() - 1);
+    return { start, end };
+}
+
+function getMonthRange(monthValue) {
+    const [year, month] = monthValue.split('-').map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    return { start, end };
+}
+
+function getOverallRange() {
+    if (!financeTransactions.length) {
+        const now = new Date();
+        return { start: now, end: now };
+    }
+    return {
+        start: new Date(financeTransactions[0].transaction_date),
+        end: new Date(financeTransactions[financeTransactions.length - 1].transaction_date)
+    };
+}
+
+function formatDateLabel(d) {
+    return d.toISOString().slice(0, 10);
+}
+
+function parseTxDate(value) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+function getFilteredTransactions() {
+    const period = document.getElementById('financePeriod').value;
+    const monthInput = document.getElementById('financeMonth');
+    let range;
+    if (period === 'week') {
+        range = getPastWeekRange();
+    } else if (period === 'month') {
+        range = getMonthRange(monthInput.value);
+    } else {
+        range = getOverallRange();
+    }
+
+    const filtered = financeTransactions.filter(t => {
+        const dt = parseTxDate(t.transaction_date);
+        return dt >= range.start && dt <= range.end;
+    });
+
+    const meta = document.getElementById('financePeriodMeta');
+    meta.textContent = `Showing: ${formatDateLabel(range.start)} to ${formatDateLabel(range.end)}`;
+    return { filtered, range };
+}
+
+function buildLineSeries(transactions, range) {
+    const byDayNet = {};
+    transactions.forEach(t => {
+        const day = t.transaction_date;
+        const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
+        byDayNet[day] = (byDayNet[day] || 0) + delta;
+    });
+
+    const labels = [];
+    const values = [];
+    let running = 0;
+    const cursor = new Date(range.start);
+    while (cursor <= range.end) {
+        const day = formatDateLabel(cursor);
+        labels.push(day.slice(5));
+        running += byDayNet[day] || 0;
+        values.push(Number(running.toFixed(2)));
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return { labels, values };
+}
+
+function buildExpenseBreakdown(transactions) {
+    const byCat = {};
+    transactions
+        .filter(t => t.type === 'expense')
+        .forEach(t => {
+            const cat = t.cat_name || 'Uncategorized';
+            byCat[cat] = (byCat[cat] || 0) + Number(t.amount || 0);
+        });
+    const labels = Object.keys(byCat);
+    const values = labels.map(l => Number(byCat[l].toFixed(2)));
+    return { labels, values };
+}
+
+function renderFinanceCharts() {
+    const { filtered, range } = getFilteredTransactions();
+    const noData = document.getElementById('financeNoData');
+    noData.classList.toggle('hidden', filtered.length > 0);
+
+    const line = buildLineSeries(filtered, range);
+    const pie = buildExpenseBreakdown(filtered);
+
+    const lineEl = document.getElementById('moneyLineChart');
+    const pieEl = document.getElementById('spendPieChart');
+
+    if (moneyLineChart) moneyLineChart.destroy();
+    if (spendPieChart) spendPieChart.destroy();
+
+    moneyLineChart = new Chart(lineEl, {
+        type: 'line',
+        data: {
+            labels: line.labels,
+            datasets: [{
+                label: `Balance Change (${financeCurrency})`,
+                data: line.values,
+                borderColor: '#2563eb',
+                backgroundColor: '#2563eb22',
+                borderWidth: 2,
+                pointRadius: 2,
+                tension: 0.25,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'bottom' } },
+            scales: { y: { title: { display: true, text: `Amount (${financeCurrency})` } } }
+        }
+    });
+
+    spendPieChart = new Chart(pieEl, {
+        type: 'pie',
+        data: {
+            labels: pie.labels.length ? pie.labels : ['No expenses'],
+            datasets: [{
+                data: pie.labels.length ? pie.values : [1],
+                backgroundColor: pie.labels.length
+                    ? ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#64748b']
+                    : ['#d1d5db']
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+}
+
+document.getElementById('financePeriod').addEventListener('change', (e) => {
+    document.getElementById('financeMonthWrap').classList.toggle('hidden', e.target.value !== 'month');
+    renderFinanceCharts();
+});
+document.getElementById('financeMonth').addEventListener('change', renderFinanceCharts);
+
+renderFinanceCharts();
+</script>
+{% endblock %}

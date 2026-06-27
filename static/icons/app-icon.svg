@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Life Tracker">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+  <circle cx="256" cy="190" r="86" fill="#f8fafc" opacity="0.95"/>
+  <path d="M256 300c-66 0-120 53-120 119v11h240v-11c0-66-54-119-120-119z" fill="#f8fafc" opacity="0.95"/>
+  <path d="M352 119l26 14-15 26-26-14z" fill="#fbbf24"/>
+  <path d="M377 162l25 14-15 26-25-14z" fill="#fbbf24"/>
+</svg>

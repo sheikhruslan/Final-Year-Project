@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}Sleep Tracker{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold">😴 Sleep Tracker</h1>
+        <form method="GET" action="/sleep">
+            <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-2">
+                {% for value in [14, 30, 90, 180] %}
+                <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d history</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+    <!-- Log Sleep -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <h3 class="font-semibold">{{ 'Edit Sleep Entry' if today != actual_today else "Log Last Night's Sleep" }} <span class="text-sm font-normal text-gray-500 dark:text-gray-400">({{ yesterday }} → {{ today }})</span></h3>
+            {% if today != actual_today %}<a href="/sleep" class="text-xs bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded">Back To Today</a>{% endif %}
+        </div>
+        <form action="/sleep/add" method="POST" class="space-y-4">
+            <input type="hidden" name="sleep_date" value="{{ today }}">
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Went to bed</label>
+                    <input type="time" name="sleep_time" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm" value="{{ today_log.sleep_time if today_log else '' }}">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Woke up</label>
+                    <input type="time" name="wake_time" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm" value="{{ today_log.wake_time if today_log else '' }}">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded text-sm">Save</button>
+                </div>
+            </div>
+            <textarea name="notes" placeholder="Notes (optional)" rows="1" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">{{ today_log.notes if today_log and today_log.notes else '' }}</textarea>
+        </form>
+    </div>
+    <!-- Stats -->
+    {% if today_log and today_log.sleep_time and today_log.wake_time %}
+    <div class="grid grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+            <div class="text-2xl font-bold text-indigo-600">{{ today_log.sleep_time }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Bedtime</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+            <div class="text-2xl font-bold text-amber-600">{{ today_log.wake_time }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">Wake up</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
+            {% if today_log.sleep_time == '00:00' and today_log.wake_time == '00:00' %}
+            <div class="text-2xl font-bold text-red-500">No sleep</div>
+            {% else %}
+            {% set total_minutes = ((today_log.total_hours or 0) * 60)|round|int %}
+            <div class="text-2xl font-bold text-green-600">{{ total_minutes // 60 }}h {{ total_minutes % 60 }}m</div>
+            {% endif %}
+            <div class="text-xs text-gray-500 dark:text-gray-400">Hours slept</div>
+        </div>
+    </div>
+    {% endif %}
+    {% if logs %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h3 class="font-semibold mb-3">Sleep Duration Trend</h3>
+            <canvas id="sleepHoursChart" height="180"></canvas>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h3 class="font-semibold mb-3">Sleep Timing Trend</h3>
+            <canvas id="sleepTimingChart" height="180"></canvas>
+        </div>
+    </div>
+    {% endif %}
+    <!-- History -->
+    {% if logs %}
+    <details class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <summary class="p-4 cursor-pointer select-none border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3">
+            <h3 class="font-semibold text-sm">Recent History</h3>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Click to expand</span>
+        </summary>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                    <th class="text-left p-3">Date</th><th class="text-left p-3">Bedtime</th><th class="text-left p-3">Wake</th><th class="text-left p-3">Hours</th><th class="text-left p-3">Notes</th><th class="text-left p-3">Actions</th>
+                </tr></thead>
+                <tbody>
+                {% for log in logs %}
+                <tr class="border-b border-gray-50 dark:border-gray-700/50">
+                    <td class="p-3">{{ log.sleep_date }}</td>
+                    <td class="p-3">{{ log.sleep_time or '-' }}</td>
+                    <td class="p-3">{{ log.wake_time or '-' }}</td>
+                    {% if log.sleep_time == '00:00' and log.wake_time == '00:00' %}
+                    <td class="p-3 text-red-500">No sleep</td>
+                    {% else %}
+                    {% set total_minutes = ((log.total_hours or 0) * 60)|round|int %}
+                    <td class="p-3">{{ total_minutes // 60 }}h {{ total_minutes % 60 }}m</td>
+                    {% endif %}
+                    <td class="p-3 text-gray-500">{{ log.notes or '' }}</td>
+                    <td class="p-3">
+                        <div class="flex gap-3 text-xs">
+                            <a href="/sleep?date={{ log.sleep_date }}" class="text-blue-600 dark:text-blue-400">Edit</a>
+                            <form action="/sleep/delete/{{ log.sleep_date }}" method="POST" onsubmit="return confirm('Delete this sleep entry?')">
+                                <button class="text-red-500">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+    {% endif %}
+
+    <!-- Nap Tracker -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold mb-4">💤 Log a Nap</h3>
+        <form action="/sleep/nap/add" method="POST" class="space-y-4">
+            <input type="hidden" name="nap_date" value="{{ actual_today }}">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nap start</label>
+                    <input type="time" name="start_time" required class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Nap end</label>
+                    <input type="time" name="end_time" required class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Notes (optional)</label>
+                    <input type="text" name="notes" placeholder="e.g. felt refreshed" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded text-sm">Log Nap</button>
+                </div>
+            </div>
+        </form>
+        {% if today_naps %}
+        <div class="mt-4">
+            <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Today's Naps</h4>
+            <div class="space-y-2">
+            {% for nap in today_naps %}
+            <div class="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 rounded px-3 py-2 text-sm">
+                <span>{{ nap.start_time }} → {{ nap.end_time }}</span>
+                <span class="font-semibold text-indigo-600 dark:text-indigo-400">{{ nap.duration_minutes }} min</span>
+                {% if nap.notes %}<span class="text-gray-500 text-xs">{{ nap.notes }}</span>{% endif %}
+                <form action="/sleep/nap/delete/{{ nap.id }}" method="POST" onsubmit="return confirm('Delete this nap?')">
+                    <button class="text-red-500 text-xs">Delete</button>
+                </form>
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Nap History -->
+    {% if recent_naps %}
+    <details class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <summary class="p-4 cursor-pointer select-none border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3">
+            <h3 class="font-semibold text-sm">Nap History</h3>
+            <span class="text-xs text-gray-500 dark:text-gray-400">Click to expand</span>
+        </summary>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                    <th class="text-left p-3">Date</th><th class="text-left p-3">Start</th><th class="text-left p-3">End</th><th class="text-left p-3">Duration</th><th class="text-left p-3">Notes</th><th class="text-left p-3">Actions</th>
+                </tr></thead>
+                <tbody>
+                {% for nap in recent_naps %}
+                <tr class="border-b border-gray-50 dark:border-gray-700/50">
+                    <td class="p-3">{{ nap.nap_date }}</td>
+                    <td class="p-3">{{ nap.start_time }}</td>
+                    <td class="p-3">{{ nap.end_time }}</td>
+                    <td class="p-3 font-medium text-indigo-600 dark:text-indigo-400">{{ nap.duration_minutes }} min</td>
+                    <td class="p-3 text-gray-500">{{ nap.notes or '' }}</td>
+                    <td class="p-3">
+                        <form action="/sleep/nap/delete/{{ nap.id }}" method="POST" onsubmit="return confirm('Delete this nap?')">
+                            <button class="text-red-500 text-xs">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+    {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const sleepLogs = {{ sleep_chart_logs|tojson }};
+
+function timeToHourValue(timeString, isBedtime) {
+    if (!timeString) return null;
+    const [hours, minutes] = timeString.split(':').map(Number);
+    let value = hours + (minutes / 60);
+    if (isBedtime && value < 12) value += 24;
+    return Number(value.toFixed(2));
+}
+
+function hourTickLabel(value) {
+    const normalized = value >= 24 ? value - 24 : value;
+    const hour = Math.floor(normalized);
+    const minutes = Math.round((normalized - hour) * 60);
+    const period = hour >= 12 ? 'pm' : 'am';
+    const displayHour = ((hour + 11) % 12) + 1;
+    return `${displayHour}:${String(minutes).padStart(2, '0')} ${period}`;
+}
+
+if (sleepLogs.length) {
+    const ordered = [...sleepLogs].reverse();
+    const labels = ordered.map(log => log.sleep_date);
+    const isNoSleep = log => log.sleep_time === '00:00' && log.wake_time === '00:00';
+    const durationData = ordered.map(log => isNoSleep(log) ? null : Number(log.total_hours || 0));
+    const bedtimeData = ordered.map(log => isNoSleep(log) ? null : timeToHourValue(log.sleep_time, true));
+    const wakeData = ordered.map(log => isNoSleep(log) ? null : timeToHourValue(log.wake_time, false));
+
+    new Chart(document.getElementById('sleepHoursChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Hours slept',
+                data: durationData,
+                borderColor: '#2563eb',
+                backgroundColor: '#2563eb22',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.25,
+                pointRadius: 3,
+                spanGaps: false
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'bottom' } },
+            scales: {
+                y: { title: { display: true, text: 'Hours' }, min: 0 },
+                x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('sleepTimingChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Bedtime',
+                    data: bedtimeData,
+                    borderColor: '#7c3aed',
+                    backgroundColor: '#7c3aed22',
+                    borderWidth: 2,
+                    tension: 0.25,
+                    pointRadius: 3
+                },
+                {
+                    label: 'Wake up',
+                    data: wakeData,
+                    borderColor: '#f59e0b',
+                    backgroundColor: '#f59e0b22',
+                    borderWidth: 2,
+                    tension: 0.25,
+                    pointRadius: 3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'bottom' } },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Time of day' },
+                    ticks: { callback: (value) => hourTickLabel(value) }
+                },
+                x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

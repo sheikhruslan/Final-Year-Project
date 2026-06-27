@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Chinese (HSK){% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">🇨🇳 Chinese (HSK)</h1>
+            <p class="text-sm text-gray-500">Detailed HSK roadmap with module-level tracking.</p>
+        </div>
+        <a href="/language" class="text-sm px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-50">Back to Language</a>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-emerald-100 dark:border-emerald-900/40">
+            <div class="text-xs text-gray-500">Overall HSK Progress</div>
+            <div class="text-2xl font-bold mt-1">{{ hsk_overall_pct }}%</div>
+            <div class="mt-2 w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700">
+                <div class="h-2 rounded-full bg-emerald-500" style="width: {{ hsk_overall_pct }}%"></div>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-emerald-100 dark:border-emerald-900/40">
+            <div class="text-xs text-gray-500">Current Position</div>
+            <div class="text-xl font-semibold mt-1">HSK {{ hsk_current_level }} · Module {{ hsk_current_module }}/{{ hsk_max_module }}</div>
+            <div class="text-xs text-gray-500 mt-2">Focus: {{ hsk_current_level_data.focus }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-emerald-100 dark:border-emerald-900/40">
+            <div class="text-xs text-gray-500">Vocabulary Milestone</div>
+            <div class="text-xl font-semibold mt-1">{{ hsk_vocab_progress }} / {{ hsk_total_vocab_goal }}</div>
+            <div class="text-xs text-gray-500 mt-2">Interpolated from your level and current module.</div>
+        </div>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-4">
+        <form method="POST" action="{{ url_for('language_hsk_update') }}" class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700 space-y-3">
+            <h2 class="font-semibold">Update Position</h2>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">HSK Level</label>
+                <select name="level" class="w-full border rounded p-2 text-sm bg-gray-50 dark:bg-gray-900">
+                    {% for level in hsk_curriculum %}
+                    <option value="{{ level.level }}" {% if level.level == hsk_current_level %}selected{% endif %}>HSK {{ level.level }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Module Number</label>
+                <input type="number" name="module" min="1" max="{{ hsk_max_module }}" value="{{ hsk_current_module }}" class="w-full border rounded p-2 text-sm bg-gray-50 dark:bg-gray-900" />
+            </div>
+            <button class="w-full py-2 rounded bg-emerald-600 text-white text-sm">Save Position</button>
+        </form>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+            <h2 class="font-semibold mb-3">Current Level Modules</h2>
+            <ol class="space-y-2 text-sm">
+                {% for module_name in hsk_current_level_data.toc %}
+                <li class="p-2 rounded {% if loop.index == hsk_current_module %}bg-emerald-50 dark:bg-emerald-900/20 font-semibold{% endif %}">
+                    {{ loop.index }}. {{ module_name }}{% if loop.index == hsk_current_module %} (current){% endif %}
+                </li>
+                {% endfor %}
+            </ol>
+            <form method="POST" action="{{ url_for('language_hsk_complete_module') }}" class="mt-4">
+                <button class="w-full py-2 rounded bg-gray-900 text-white text-sm">Complete Current Module</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+        <h2 class="font-semibold mb-3">HSK Levels Breakdown</h2>
+        <div class="space-y-3">
+            {% for level in hsk_curriculum %}
+            <div class="border rounded p-3 {% if level.level == hsk_current_level %}border-emerald-300 bg-emerald-50/60 dark:bg-emerald-900/10{% else %}border-gray-200 dark:border-gray-700{% endif %}">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="font-medium">HSK {{ level.level }} · {{ level.vocab }} words</div>
+                    <div class="text-xs text-gray-500">{{ level.progress_pct }}%</div>
+                </div>
+                <div class="mt-2 w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div class="h-2 rounded-full bg-emerald-500" style="width: {{ level.progress_pct }}%"></div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">{{ level.focus }}</p>
+                <p class="text-xs text-gray-500 mt-1">Modules: {{ level.toc|join(' • ') }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

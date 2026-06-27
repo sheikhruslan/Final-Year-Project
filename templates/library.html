@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Library{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">📚 Library</h1>
+        <button onclick="document.getElementById('addBookModal').classList.remove('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add Book</button>
+    </div>
+    {% if books %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {% for book in books %}
+        <div class="group cursor-pointer" onclick="openBook({{ book.id }})">
+            <div class="aspect-[2/3] rounded-lg overflow-hidden shadow-md bg-gray-200 dark:bg-gray-700 relative">
+                {% if book.cover_image %}
+                <img src="/static/uploads/{{ book.cover_image }}" alt="{{ book.title }}" class="w-full h-full object-cover">
+                {% else %}
+                <div class="w-full h-full flex items-center justify-center text-4xl">📖</div>
+                {% endif %}
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all"></div>
+                {% if book.status == 'reading' %}
+                <div class="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">Reading</div>
+                {% elif book.status == 'completed' %}
+                <div class="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">Done</div>
+                {% endif %}
+            </div>
+            <h4 class="text-sm font-medium mt-2 truncate">{{ book.title }}</h4>
+            <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ book.author or 'Unknown' }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400">
+        <p class="text-4xl mb-3">📚</p>
+        <p>Your library is empty. Add your first book!</p>
+    </div>
+    {% endif %}
+</div>
+<!-- Add Book Modal -->
+<div id="addBookModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-bold mb-4">Add Book</h3>
+        <form action="/library/add" method="POST" enctype="multipart/form-data" class="space-y-3">
+            <input type="text" name="title" required placeholder="Book title" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="author" placeholder="Author" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Cover Image</label>
+                <input type="file" name="cover" accept="image/*" class="w-full text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-50 dark:file:bg-blue-900/30 file:text-blue-700 dark:file:text-blue-400">
+            </div>
+            <select name="status" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="to_read">To Read</option>
+                <option value="reading">Reading</option>
+                <option value="completed">Completed</option>
+            </select>
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Add</button>
+                <button type="button" onclick="document.getElementById('addBookModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+<!-- Book Detail Modal -->
+<div id="bookModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-start mb-4">
+            <h3 class="text-lg font-bold" id="bookTitle"></h3>
+            <button onclick="document.getElementById('bookModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+        </div>
+        <div id="bookContent"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const books = {{ books_json|safe }};
+function openBook(id) {
+    const book = books.find(b => b.id === id);
+    if(!book) return;
+    document.getElementById('bookTitle').textContent = book.title;
+    document.getElementById('bookModal').classList.remove('hidden');
+    let html = `<p class="text-sm text-gray-500 dark:text-gray-400 mb-3">${book.author || 'Unknown author'}</p>`;
+    html += `<form action="/library/update/${book.id}" method="POST" class="space-y-3">
+        <select name="status" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <option value="to_read" ${book.status==='to_read'?'selected':''}>To Read</option>
+            <option value="reading" ${book.status==='reading'?'selected':''}>Reading</option>
+            <option value="completed" ${book.status==='completed'?'selected':''}>Completed</option>
+        </select>
+        <div><label class="block text-xs text-gray-500 mb-1">Rating</label>
+        <input type="number" name="rating" min="1" max="5" value="${book.rating||''}" placeholder="1-5" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></div>
+        <div><label class="block text-xs text-gray-500 mb-1">Notes</label>
+        <textarea name="notes" rows="6" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">${book.notes||''}</textarea></div>
+        <div class="flex gap-2">
+            <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Save</button>
+            <button type="button" onclick="deleteBook(${book.id})" class="flex-1 bg-red-100 dark:bg-red-900/30 text-red-600 py-2 rounded text-sm text-center">Delete</button>
+        </div>
+    </form>`;
+    document.getElementById('bookContent').innerHTML = html;
+}
+function deleteBook(id) {
+    if(!confirm('Delete this book?')) return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/library/delete/' + id;
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}

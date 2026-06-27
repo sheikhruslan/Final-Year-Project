@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Focus Timer{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold">⏱️ Focus Timer</h1>
+    <!-- Timer -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-sm text-center">
+        <div class="text-6xl font-mono font-bold mb-6" id="display">25:00</div>
+        <div class="flex gap-2 justify-center mb-6">
+            {% for mins, label in [(25,'25 min'),(45,'45 min'),(60,'60 min')] %}
+            <button onclick="setTimer({{ mins }})" class="px-4 py-2 rounded-lg text-sm border border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 preset-btn">{{ label }}</button>
+            {% endfor %}
+            <input type="number" id="customMin" min="1" max="180" placeholder="Custom" class="w-20 text-center bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm" onchange="setTimer(this.value)">
+        </div>
+        <div class="flex gap-3 justify-center">
+            <button onclick="startTimer()" id="startBtn" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium">Start</button>
+            <button onclick="pauseTimer()" id="pauseBtn" class="hidden bg-yellow-600 hover:bg-yellow-700 text-white px-8 py-3 rounded-lg font-medium">Pause</button>
+            <button onclick="resetTimer()" class="bg-gray-200 dark:bg-gray-700 px-6 py-3 rounded-lg text-sm">Reset</button>
+        </div>
+        <input type="text" id="taskLabel" placeholder="What are you focusing on?" class="mt-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-2 text-sm text-center w-64">
+    </div>
+    <!-- Today's Sessions -->
+    {% if sessions %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold text-sm mb-4">Today's Sessions — {{ total_today }} min total</h3>
+        <div class="space-y-2">
+            {% for s in sessions %}
+            <div class="flex items-center gap-3 text-sm">
+                <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                <span class="font-medium">{{ s.duration_minutes }} min</span>
+                <span class="text-gray-500 dark:text-gray-400">{{ s.task_description or 'Focus' }}</span>
+                <span class="text-xs text-gray-400 ml-auto">{{ s.created_at[-8:-3] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    <!-- Weekly Chart -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold text-sm mb-4">This Week</h3>
+        <canvas id="weekChart" height="120"></canvas>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let totalSeconds = 25*60, remaining = 25*60, interval = null, running = false;
+const display = document.getElementById('display');
+
+function setTimer(mins) {
+    if(running) return;
+    totalSeconds = mins * 60; remaining = totalSeconds;
+    updateDisplay();
+}
+function updateDisplay() {
+    const m = Math.floor(remaining/60), s = remaining%60;
+    display.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function startTimer() {
+    if(running) return;
+    running = true;
+    document.getElementById('startBtn').classList.add('hidden');
+    document.getElementById('pauseBtn').classList.remove('hidden');
+    interval = setInterval(()=>{
+        remaining--;
+        updateDisplay();
+        if(remaining <= 0) {
+            clearInterval(interval); running = false;
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('pauseBtn').classList.add('hidden');
+            saveSession();
+            if(Notification.permission === 'granted') new Notification('Focus session complete!');
+            else alert('Focus session complete!');
+        }
+    }, 1000);
+}
+function pauseTimer() {
+    clearInterval(interval); running = false;
+    document.getElementById('startBtn').classList.remove('hidden');
+    document.getElementById('pauseBtn').classList.add('hidden');
+}
+function resetTimer() {
+    pauseTimer(); remaining = totalSeconds; updateDisplay();
+}
+function saveSession() {
+    const mins = Math.round(totalSeconds / 60);
+    const label = document.getElementById('taskLabel').value;
+    fetch('/focus/save', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body:`duration_minutes=${mins}&task_label=${encodeURIComponent(label)}`})
+    .then(()=>location.reload());
+}
+// Request notification permission
+if('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+
+// Weekly chart
+const weekData = {{ week_data|tojson }};
+new Chart(document.getElementById('weekChart'), {
+    type:'bar',
+    data:{labels:weekData.map(d=>d.day), datasets:[{label:'Minutes', data:weekData.map(d=>d.minutes), backgroundColor:'rgb(59,130,246)', borderRadius:4}]},
+    options:{scales:{y:{beginAtZero:true}}, plugins:{legend:{display:false}}}
+});
+</script>
+{% endblock %}

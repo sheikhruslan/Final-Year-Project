@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">💼 Jobs</h1>
+        <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add</button>
+    </div>
+    {% if jobs %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {% for status, label, color in [('applied','Applied','blue'),('interview','Interview','yellow'),('offer','Offer','green')] %}
+        <div>
+            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{{ label }}</h3>
+            <div class="space-y-2">
+                {% for j in jobs if j.status == status %}
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border-l-4 border-{{ color }}-500">
+                    <h4 class="font-medium text-sm">{{ j.position }}</h4>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ j.company }}</p>
+                    {% if j.salary_range %}<p class="text-xs text-green-600 mt-1">{{ j.salary_range }}</p>{% endif %}
+                    <p class="text-xs text-gray-400 mt-1">{{ j.application_date }}</p>
+                    {% if j.notes %}<p class="text-xs text-gray-400 mt-1">{{ j.notes }}</p>{% endif %}
+                    {% if j.job_url %}<a href="{{ j.job_url }}" target="_blank" class="text-xs text-blue-600 hover:underline">Open link</a>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <!-- Rejected -->
+    {% set rejected = jobs|selectattr('status','equalto','rejected')|list %}
+    {% if rejected %}
+    <details>
+        <summary class="text-sm text-gray-500 cursor-pointer">Rejected ({{ rejected|length }})</summary>
+        <div class="mt-2 space-y-1">
+            {% for j in rejected %}
+            <div class="flex items-center gap-3 text-sm text-gray-400 p-2">
+                <span class="line-through">{{ j.position }} @ {{ j.company }}</span>
+                <span class="text-xs">{{ j.application_date }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+    {% else %}
+    <div class="text-center py-16 text-gray-400"><p class="text-4xl mb-3">💼</p><p>No job applications yet</p></div>
+    {% endif %}
+</div>
+<!-- Add Modal -->
+<div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-bold mb-4">Add Job Application</h3>
+        <form action="/jobs/add" method="POST" class="space-y-3">
+            <input type="text" name="company" required placeholder="Company" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="position" required placeholder="Position" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="date" name="application_date" value="{{ today }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <select name="status" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="applied">Applied</option>
+                <option value="interview">Interview</option>
+                <option value="offer">Offer</option>
+                <option value="rejected">Rejected</option>
+            </select>
+            <input type="text" name="salary_range" placeholder="Salary range" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="text" name="location" placeholder="Location" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="url" name="job_url" placeholder="Job URL" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <textarea name="notes" placeholder="Notes" rows="2" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Add</button>
+                <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

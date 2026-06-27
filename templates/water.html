@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Water Intake{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold">💧 Water Intake</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Logging for {{ selected_date }}{% if not is_today %} · previous day view{% endif %}</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="toggleSweatFactor()" id="sweatBtn" class="px-3 py-1.5 rounded-lg text-sm border {% if log and log.sweat_factor %}bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400{% else %}border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400{% endif %}">
+                🏋️ Sweat Factor {% if log and log.sweat_factor %}ON{% else %}OFF{% endif %}
+            </button>
+            <button onclick="toggleFasting()" id="fastingBtn" class="px-3 py-1.5 rounded-lg text-sm border {% if log and log.is_fasting %}bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400{% else %}border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400{% endif %}">
+                🕌 Fasting {% if log and log.is_fasting %}ON{% else %}OFF{% endif %}
+            </button>
+        </div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-end gap-3 md:justify-between">
+            <div class="flex items-center gap-2">
+                <a href="/water?date={{ prev_date }}" class="px-3 py-2 rounded border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">← Previous Day</a>
+                {% if next_date %}
+                <a href="/water?date={{ next_date }}" class="px-3 py-2 rounded border border-gray-200 dark:border-gray-700 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">Next Day →</a>
+                {% else %}
+                <span class="px-3 py-2 rounded border border-gray-100 dark:border-gray-800 text-sm text-gray-400">Next Day →</span>
+                {% endif %}
+            </div>
+            <form method="GET" action="/water" class="flex items-end gap-2">
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Jump to date</label>
+                    <input type="date" name="date" value="{{ selected_date }}" max="{{ today }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                </div>
+                <button class="px-3 py-2 rounded bg-gray-900 text-white text-sm">Open</button>
+            </form>
+        </div>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+        <div class="flex items-center justify-between gap-4">
+            <div>
+                <div class="text-sm font-medium">Hydration Strategy: {{ hydration_meta.mode_label }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Weight {{ hydration_meta.weight_kg }}kg · Baseline {{ hydration_meta.baseline_ml }}ml/day{% if hydration_meta.sweat_factor %} · +Sweat boost{% endif %}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Wake time: {{ wake_time }} · {{ hydration_meta.electrolyte_tip }}</div>
+            </div>
+        </div>
+        <ul class="mt-3 space-y-1">
+            {% for line in hydration_meta.phase_summary %}
+            <li class="text-xs text-gray-600 dark:text-gray-300">• {{ line }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <!-- Progress -->
+    {% set completed_ml = hourly|selectattr('completed','equalto',1)|map(attribute='target_ml')|sum if hourly else 0 %}
+    {% set total_ml = hourly|map(attribute='target_ml')|sum if hourly else 0 %}
+    {% set remaining_ml = total_ml - completed_ml if total_ml > completed_ml else 0 %}
+    {% set water_pct = (completed_ml / total_ml) if total_ml > 0 else 0 %}
+    {% set next_slot = namespace(item=None) %}
+    {% if hourly %}
+        {% for s in hourly %}
+            {% if not s.completed and next_slot.item is none %}
+                {% set next_slot.item = s %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm lg:col-span-2">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h3 class="font-semibold text-sm">Today’s Hydration Plan</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Tap the next drink when you finish it. The schedule is still hourly behind the scenes, but this view is built for action.</p>
+                </div>
+                {% if next_slot.item %}
+                <div class="text-right">
+                    <div class="text-[11px] uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">Next up</div>
+                    <div class="text-sm font-medium">{{ next_slot.item.hour_label }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ next_slot.item.target_ml }}ml</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/40">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Completed</div>
+                    <div class="font-semibold">{{ completed_ml }}ml</div>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/40">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Remaining</div>
+                    <div class="font-semibold">{{ remaining_ml }}ml</div>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/40">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Target</div>
+                    <div class="font-semibold">{{ total_ml }}ml</div>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-900/40">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Done</div>
+                    <div class="font-semibold">{{ ((completed_ml / total_ml * 100) if total_ml > 0 else 0)|round(0) }}%</div>
+                </div>
+            </div>
+
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
+                <div class="bg-blue-500 h-3 rounded-full transition-all" id="progressBar" style="width: {{ (completed_ml / total_ml * 100) if total_ml > 0 else 0 }}%"></div>
+            </div>
+
+            {% if hourly %}
+            <div class="space-y-4">
+                {% for label, start_hour, end_hour in [('Morning', 5, 11), ('Afternoon', 12, 16), ('Evening', 17, 23)] %}
+                {% set items = hourly|selectattr('hour_label', 'defined')|list %}
+                {% set period_slots = [] %}
+                {% for s in items %}
+                    {% set hour_val = s.hour_label.split(':')[0]|int %}
+                    {% if hour_val >= start_hour and hour_val <= end_hour %}
+                        {% set _ = period_slots.append(s) %}
+                    {% endif %}
+                {% endfor %}
+                {% if period_slots %}
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-xs uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">{{ label }}</h4>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ period_slots|selectattr('completed','equalto',1)|list|length }}/{{ period_slots|length }}</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {% for s in period_slots %}
+                        <button onclick="toggleWater('{{ s.log_date }}', '{{ s.hour_label }}')" class="text-left w-full p-3 rounded-lg border transition-all {% if s.completed %}bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800{% else %}bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 hover:border-blue-400{% endif %}">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <div class="text-sm font-medium {% if s.completed %}text-blue-700 dark:text-blue-300{% endif %}">{{ s.hour_label }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ label }} slot</div>
+                                </div>
+                                <div class="text-sm font-semibold {% if s.completed %}text-blue-600 dark:text-blue-400{% else %}text-gray-600 dark:text-gray-300{% endif %}">{{ s.target_ml }}ml {% if s.completed %}✓{% endif %}</div>
+                            </div>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-center text-gray-400 py-8">No schedule for this date yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="space-y-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-sm mb-3">Quick Actions</h3>
+                <div class="space-y-2">
+                    {% if next_slot.item %}
+                    <button onclick="toggleWater('{{ next_slot.item.log_date }}', '{{ next_slot.item.hour_label }}')" class="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 text-sm font-medium">
+                        Mark next drink ({{ next_slot.item.hour_label }})
+                    </button>
+                    {% endif %}
+                    {% if hourly %}
+                    {% set remaining_slots = hourly|selectattr('completed','equalto',0)|list %}
+                    <button onclick="markAllRemaining()" class="w-full rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700">
+                        Mark remaining as complete
+                    </button>
+                    <button onclick="clearTodayWater()" class="w-full rounded-lg border border-red-200 dark:border-red-800 px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+                        Reset today
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <details open class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+                <summary class="p-4 cursor-pointer select-none border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3">
+                    <h3 class="font-semibold text-sm">Full Schedule</h3>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">Reference</span>
+                </summary>
+                <div class="p-4 space-y-2 max-h-64 overflow-y-auto">
+                    {% for s in hourly %}
+                    <div class="flex items-center justify-between gap-3 text-xs rounded-lg px-3 py-2 {% if s.completed %}bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300{% else %}bg-gray-50 dark:bg-gray-900/40 text-gray-600 dark:text-gray-300{% endif %}">
+                        <div>{{ s.hour_label }}</div>
+                        <div class="font-medium">{{ s.target_ml }}ml{% if s.completed %} · done{% else %} · pending{% endif %}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </details>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h3 class="font-semibold text-sm">Water Glass</h3>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ completed_ml }}ml / {{ total_ml }}ml</span>
+                </div>
+                <div class="flex justify-center">
+                    <div class="relative w-28 h-56 rounded-b-3xl rounded-t-xl border-4 border-slate-300 dark:border-slate-500 bg-gradient-to-b from-slate-50/80 to-slate-100/80 dark:from-slate-700/30 dark:to-slate-800/40 overflow-hidden">
+                        <div class="absolute inset-x-0 top-0 h-1.5 bg-emerald-500/80"></div>
+                        <div class="absolute inset-x-2 bottom-2 rounded-b-2xl bg-gradient-to-t from-sky-600 via-sky-500 to-cyan-300 transition-all duration-300" style="height: {{ (water_pct * 100)|round(0) }}%;"></div>
+                        <div class="absolute inset-x-0 top-1/2 h-px border-t-2 border-dashed border-emerald-500/70"></div>
+                        <div class="absolute inset-x-0 top-2 text-center text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">GOAL</div>
+                        <div class="absolute inset-x-0 bottom-3 text-center text-[10px] font-semibold text-slate-500 dark:text-slate-300">{{ remaining_ml }}ml left</div>
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    Blue fill = water drank today. The line marks the full daily target.
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- History -->
+    {% if history %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <h3 class="font-semibold text-sm">History</h3>
+            <form method="GET" action="/water" class="flex items-center gap-2">
+                <input type="hidden" name="date" value="{{ selected_date }}">
+                <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-1.5">
+                    {% for value in [7, 14, 30, 90] %}
+                    <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d</option>
+                    {% endfor %}
+                </select>
+            </form>
+        </div>
+        <div class="flex gap-2 items-end justify-center h-32">
+            {% for h in history %}
+            {% set pct = (h.total_ml / h.target_ml * 100) if h.target_ml and h.target_ml > 0 else 0 %}
+            <div class="flex flex-col items-center gap-1">
+                <div class="w-10 bg-blue-200 dark:bg-blue-800 rounded-t relative" style="height: {{ (pct * 1.2)|int }}px">
+                    {% if pct >= 100 %}<span class="absolute -top-5 text-xs">💧</span>{% endif %}
+                </div>
+                <span class="text-xs text-gray-500">{{ h.log_date[-5:] }}</span>
+                <span class="text-xs text-gray-400">{{ pct|int }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="mt-4 space-y-2">
+            {% for h in history %}
+            <div class="flex items-center justify-between gap-3 text-sm border-t border-gray-100 dark:border-gray-700 pt-2">
+                <div class="text-gray-600 dark:text-gray-300">{{ h.log_date }} · {{ h.total_ml }}/{{ h.target_ml }}ml</div>
+                <div class="flex gap-3 text-xs">
+                    <a href="/water?date={{ h.log_date }}" class="text-blue-600 dark:text-blue-400">Open</a>
+                    <form action="/water/delete/{{ h.log_date }}" method="POST" onsubmit="return confirm('Delete this water log day?')">
+                        <button class="text-red-500">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const selectedWaterDate = '{{ selected_date }}';
+
+function toggleWater(logDate, hourLabel) {
+    return fetch('/water/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({log_date:logDate, hour_label:hourLabel})})
+    .then(r=>r.json()).then(d=>{
+        if(d.success) location.reload();
+        return d;
+    });
+}
+function toggleFasting() {
+    fetch('/water/fasting', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({log_date:selectedWaterDate})})
+    .then(r=>r.json()).then(d=>{
+        if(d.success) location.reload();
+    });
+}
+function toggleSweatFactor() {
+    fetch('/water/sweat-factor', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({log_date:selectedWaterDate})})
+    .then(r=>r.json()).then(d=>{
+        if(d.success) location.reload();
+    });
+}
+async function markAllRemaining() {
+    const remainingButtons = Array.from(document.querySelectorAll('[onclick^="toggleWater("]')).filter(button => !button.innerText.includes('✓'));
+    if (!remainingButtons.length) return;
+    for (const button of remainingButtons) {
+        const match = button.getAttribute('onclick').match(/toggleWater\('([^']+)',\s*'([^']+)'\)/);
+        if (!match) continue;
+        await fetch('/water/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({log_date: match[1], hour_label: match[2]})
+        });
+    }
+    location.reload();
+}
+function clearTodayWater() {
+    if (!confirm('Reset today\'s water log?')) return;
+    fetch('/water/delete/' + selectedWaterDate, {method:'POST'})
+    .then(() => location.reload());
+}
+</script>
+{% endblock %}

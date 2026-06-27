@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Calendar{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center flex-wrap gap-3">
+        <h1 class="text-2xl font-bold">📅 Calendar</h1>
+        <div class="flex items-center gap-2">
+            <a href="?month={{ prev_month }}&year={{ prev_year }}" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800">←</a>
+            <span class="font-semibold text-lg">{{ month_name }} {{ year }}</span>
+            <a href="?month={{ next_month }}&year={{ next_year }}" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800">→</a>
+            <button onclick="openAddModal()" class="ml-3 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add Event</button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Calendar Grid -->
+        <div class="lg:col-span-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+            <!-- Day Headers -->
+            <div class="grid grid-cols-7 text-center text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                {% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+                <div class="py-2 font-medium">{{ d }}</div>
+                {% endfor %}
+            </div>
+            <!-- Calendar Grid -->
+            <div class="grid grid-cols-7">
+                {% for day in calendar_days %}
+                <div class="min-h-[100px] p-1.5 border-b border-r border-gray-50 dark:border-gray-700/50 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors
+                    {% if not day.current_month %}opacity-40{% endif %}
+                    {% if day.is_today %}bg-blue-50 dark:bg-blue-900/20{% endif %}"
+                    data-date="{{ day.date }}" onclick="handleDayClick(event, '{{ day.date }}')">
+                    <div class="text-xs mb-1 {% if day.is_today %}font-bold text-blue-600 dark:text-blue-400{% else %}text-gray-500 dark:text-gray-400{% endif %}">{{ day.day }}</div>
+                    {% if day.events %}
+                    <div class="space-y-0.5">
+                        {% for ev in day.events[:3] %}
+                        <div class="text-xs truncate px-1 py-0.5 rounded leading-tight
+                            {% if ev.type == 'todo' %}bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300
+                            {% elif ev.type == 'date' %}bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300
+                            {% elif ev.category == 'work' %}bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300
+                            {% elif ev.category == 'health' %}bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300
+                            {% elif ev.category == 'personal' %}bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300
+                            {% elif ev.category == 'social' %}bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300
+                            {% else %}bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300{% endif %}
+                            {% if ev.type == 'event' %} cursor-pointer hover:ring-1 hover:ring-blue-400{% endif %}"
+                            {% if ev.type == 'event' %}onclick='openEditModal({{ ev.id }}, {{ ev.title|tojson }}, {{ day.date|tojson }}, {{ (ev.time or '')|tojson }}, {{ (ev.category or "general")|tojson }}, {{ (ev.notes or "")|tojson }}); event.stopPropagation();'{% endif %}>
+                            {% if ev.time %}<span class="opacity-70">{{ ev.time[:5] }}</span> {% endif %}{{ ev.title }}
+                        </div>
+                        {% endfor %}
+                        {% if day.events|length > 3 %}
+                        <div class="text-xs text-gray-400 px-1">+{{ day.events|length - 3 }} more</div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-4">
+            <!-- Legend -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-sm mb-3">Legend</h3>
+                <div class="space-y-1.5 text-xs">
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-amber-200 dark:bg-amber-900/60 inline-block"></span> Work / Interview</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-green-200 dark:bg-green-900/60 inline-block"></span> Health</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-purple-200 dark:bg-purple-900/60 inline-block"></span> Personal</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-teal-200 dark:bg-teal-900/60 inline-block"></span> Social</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-gray-200 dark:bg-gray-700 inline-block"></span> General</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-blue-200 dark:bg-blue-900/60 inline-block"></span> Todo deadline</div>
+                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded bg-pink-200 dark:bg-pink-900/60 inline-block"></span> Important date</div>
+                </div>
+            </div>
+            <!-- Upcoming items -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="font-semibold text-sm mb-3">Upcoming Items</h3>
+                {% if upcoming_items %}
+                <div class="space-y-3">
+                    {% for ev in upcoming_items %}
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            {% if ev.type == 'event' %}
+                            <button type="button" class="text-left text-sm font-medium leading-tight hover:text-blue-600 dark:hover:text-blue-400"
+                                onclick='openEditModal({{ ev.id }}, {{ ev.title|tojson }}, {{ ev.date|tojson }}, {{ (ev.time or "")|tojson }}, {{ (ev.category or "general")|tojson }}, {{ (ev.notes or "")|tojson }})'>{{ ev.title }}</button>
+                            {% else %}
+                            <a href="/todos" class="text-sm font-medium leading-tight text-blue-700 dark:text-blue-300 hover:underline">{{ ev.title }}</a>
+                            {% endif %}
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                {{ ev.date }}{% if ev.time %} · {{ ev.time[:5] }}{% endif %}
+                            </div>
+                            <span class="inline-block mt-1 text-xs px-1.5 py-0.5 rounded
+                                {% if ev.type == 'todo' and ev.priority == 'high' %}bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300
+                                {% elif ev.type == 'todo' and ev.priority == 'medium' %}bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300
+                                {% elif ev.type == 'todo' and ev.priority == 'low' %}bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300
+                                {% elif ev.category == 'work' %}bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300
+                                {% elif ev.category == 'health' %}bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300
+                                {% elif ev.category == 'personal' %}bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300
+                                {% elif ev.category == 'social' %}bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300
+                                {% else %}bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400{% endif %}">
+                                {% if ev.type == 'todo' %}Todo{% else %}{{ ev.category }}{% endif %}
+                            </span>
+                            {% if ev.notes %}<div class="text-xs text-gray-400 mt-0.5">{{ ev.notes }}</div>{% endif %}
+                        </div>
+                        {% if ev.type == 'event' %}
+                        <form action="/calendar/events/delete/{{ ev.id }}" method="POST" onsubmit="return confirm('Delete this event?')">
+                            <button class="text-gray-300 hover:text-red-500 text-xs mt-0.5 shrink-0">✕</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-xs text-gray-400">No upcoming items — add an event or give a todo a due date.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Event Modal -->
+<div id="addEventModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full shadow-xl">
+        <h3 id="eventModalTitle" class="text-lg font-bold mb-4">Add Event</h3>
+        <form id="eventModalForm" action="/calendar/events/add" method="POST" class="space-y-3">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Title *</label>
+                <input type="text" id="eventTitleInput" name="title" required placeholder="e.g. Job Interview at Google"
+                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Date *</label>
+                    <input type="date" name="event_date" id="newEventDate" required
+                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Time</label>
+                    <input type="time" id="eventTimeInput" name="event_time"
+                        class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 text-sm">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Category</label>
+                <select id="eventCategoryInput" name="category" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 text-sm">
+                    <option value="general">General</option>
+                    <option value="work">Work / Interview</option>
+                    <option value="health">Health</option>
+                    <option value="personal">Personal</option>
+                    <option value="social">Social</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Notes</label>
+                <textarea id="eventNotesInput" name="notes" rows="2" placeholder="Optional details..."
+                    class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 text-sm"></textarea>
+            </div>
+            <div class="flex gap-2 pt-1">
+                <button id="eventModalSubmit" type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium">Add Event</button>
+                <button type="button" onclick="closeEventModal()"
+                    class="flex-1 bg-gray-100 dark:bg-gray-700 py-2.5 rounded-lg text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const eventModal = document.getElementById('addEventModal');
+const eventModalForm = document.getElementById('eventModalForm');
+const eventModalTitle = document.getElementById('eventModalTitle');
+const eventModalSubmit = document.getElementById('eventModalSubmit');
+const eventTitleInput = document.getElementById('eventTitleInput');
+const eventDateInput = document.getElementById('newEventDate');
+const eventTimeInput = document.getElementById('eventTimeInput');
+const eventCategoryInput = document.getElementById('eventCategoryInput');
+const eventNotesInput = document.getElementById('eventNotesInput');
+
+function closeEventModal() {
+    eventModal.classList.add('hidden');
+}
+
+function resetEventModal() {
+    eventModalTitle.textContent = 'Add Event';
+    eventModalSubmit.textContent = 'Add Event';
+    eventModalForm.action = '/calendar/events/add';
+    eventTitleInput.value = '';
+    eventDateInput.value = '{{ today }}';
+    eventTimeInput.value = '';
+    eventCategoryInput.value = 'general';
+    eventNotesInput.value = '';
+}
+
+function openAddModal(prefillDate) {
+    resetEventModal();
+    eventDateInput.value = prefillDate || '{{ today }}';
+    eventModal.classList.remove('hidden');
+}
+
+function openEditModal(eventId, title, eventDate, eventTime, category, notes) {
+    eventModalTitle.textContent = 'Edit Event';
+    eventModalSubmit.textContent = 'Save Changes';
+    eventModalForm.action = `/calendar/events/update/${eventId}`;
+    eventTitleInput.value = title;
+    eventDateInput.value = eventDate;
+    eventTimeInput.value = eventTime || '';
+    eventCategoryInput.value = category || 'general';
+    eventNotesInput.value = notes || '';
+    eventModal.classList.remove('hidden');
+}
+
+function handleDayClick(e, dateStr) {
+    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest('form')) return;
+    openAddModal(dateStr);
+}
+
+eventModal.addEventListener('click', (e) => {
+    if (e.target === eventModal) closeEventModal();
+});
+</script>
+{% endblock %}

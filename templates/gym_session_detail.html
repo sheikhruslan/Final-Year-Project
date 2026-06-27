@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Gym Session{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold">🏋️ Session Details</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ session.workout_name }} · {{ session.session_date }}</p>
+        </div>
+        <a href="/gym" class="text-xs bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-800">Back to Gym Log</a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm text-sm">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div><span class="text-gray-500 dark:text-gray-400">Duration</span><div class="font-semibold">{{ session.duration_minutes if session.duration_minutes else '-' }} min</div></div>
+            <div><span class="text-gray-500 dark:text-gray-400">Calories</span><div class="font-semibold">{{ '%.1f'|format(session.calories_burned) if session.calories_burned else '-' }} kcal</div></div>
+            <div><span class="text-gray-500 dark:text-gray-400">Type</span><div class="font-semibold">{% if session.is_cardio %}Cardio{% else %}Strength{% endif %}</div></div>
+            <div><span class="text-gray-500 dark:text-gray-400">Notes</span><div class="font-semibold">{{ session.notes if session.notes else '-' }}</div></div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+        <h2 class="font-semibold mb-3">Exercise Logs</h2>
+        {% if exercise_logs %}
+        <div class="space-y-4 text-sm">
+            {% set exercise_ns = namespace(current=None) %}
+            {% for row in exercise_logs %}
+                {% set exercise_key = row.exercise_name ~ '|' ~ row.muscle_group %}
+                {% if exercise_ns.current != exercise_key %}
+                    {% if not loop.first %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700">
+                            <div class="font-medium">{{ row.exercise_name }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ row.muscle_group }}</div>
+                        </div>
+                        <div class="divide-y divide-gray-100 dark:divide-gray-700/70">
+                    {% set exercise_ns.current = exercise_key %}
+                {% endif %}
+                <div class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                    {% if session.workout_name == 'HIIT Cardio' and row.set_type == 'interval' %}
+                    <div>Round {{ row.set_number }} · {{ row.time_seconds if row.time_seconds else 0 }}s sprint · {{ row.incline|int if row.incline else 0 }}s rest · {{ (row.time_seconds if row.time_seconds else 0) + (row.incline|int if row.incline else 0) }}s total</div>
+                    {% elif row.set_type == 'interval' and row.distance_km %}
+                    {% set pace_total_sec = (row.time_seconds / row.distance_km)|int if row.time_seconds and row.distance_km and row.distance_km > 0 else None %}
+                    <div>
+                        {{ '%.2f'|format(row.distance_km) }} km ·
+                        {% if row.time_seconds %}
+                        {% set mins = (row.time_seconds // 60) %}{% set secs = (row.time_seconds % 60) %}{{ mins }}m {{ secs }}s
+                        {% endif %}
+                        {% if pace_total_sec %}
+                         · {{ pace_total_sec // 60 }}:{{ '%02d'|format(pace_total_sec % 60) }} /km
+                        {% endif %}
+                    </div>
+                    {% elif row.set_type == 'interval' %}
+                    <div>Set {{ row.set_number }} · {{ row.speed if row.speed else 0 }} km/h · {{ row.incline if row.incline else 0 }}% incline · {{ row.time_seconds if row.time_seconds else 0 }} sec</div>
+                    {% else %}
+                    <div>Set {{ row.set_number }} <span class="text-xs text-gray-500 dark:text-gray-400">({{ row.set_type }})</span> · {{ row.weight_kg if row.weight_kg else 0 }} kg × {{ row.reps if row.reps else 0 }} reps</div>
+                    {% endif %}
+                </div>
+                {% if loop.last %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400">No exercise logs saved for this session.</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+        <h2 class="font-semibold mb-3">Stretch Logs</h2>
+        {% if stretch_logs %}
+        <div class="space-y-4 text-sm">
+            {% set stretch_ns = namespace(current=None) %}
+            {% for row in stretch_logs %}
+                {% set stretch_key = row.stretch_name ~ '|' ~ row.tracking_type %}
+                {% if stretch_ns.current != stretch_key %}
+                    {% if not loop.first %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/60 border-b border-gray-200 dark:border-gray-700">
+                            <div class="font-medium">{{ row.stretch_name }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ row.tracking_type }}</div>
+                        </div>
+                        <div class="divide-y divide-gray-100 dark:divide-gray-700/70">
+                    {% set stretch_ns.current = stretch_key %}
+                {% endif %}
+                <div class="px-4 py-3 text-gray-700 dark:text-gray-300">
+                    <div>Set {{ row.set_number }} · {% if row.completed %}Done{% else %}Not marked{% endif %}{% if row.amount %} · {{ row.amount }}{% endif %}{% if row.notes %} · {{ row.notes }}{% endif %}</div>
+                </div>
+                {% if loop.last %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400">No stretch logs saved for this session.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

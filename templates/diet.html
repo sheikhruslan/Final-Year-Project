@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Diet{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold">🍽️ Diet</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Track calories, log food, save meals, and monitor deficit and protein intake.</p>
+        </div>
+        <form method="GET" action="/diet" class="flex items-center gap-2 text-sm">
+            <label for="dietDate" class="text-gray-500 dark:text-gray-400">Day</label>
+            <input id="dietDate" type="date" name="date" value="{{ selected_date }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+            <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded">Go</button>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Maintenance Calories</div>
+            <div class="text-2xl font-bold text-blue-600 mt-1">{{ maintenance_calories if maintenance_calories is not none else '-' }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ awake_hours }}h awake from {{ awake_source }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Consumed Today</div>
+            <div class="text-2xl font-bold text-amber-600 mt-1">{{ '%.0f'|format(daily_totals.calories) }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ '%.1f'|format(daily_totals.protein_g) }}g protein</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Deficit / Surplus</div>
+            <div class="text-2xl font-bold mt-1 {% if net_calories is not none and net_calories <= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                {% if net_calories is not none %}{{ '%+.0f'|format(net_calories) }}{% else %}-{% endif %}
+            </div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {% if net_calories is not none %}{% if net_calories <= 0 %}In a deficit{% else %}In a surplus{% endif %}{% else %}Need weight to estimate{% endif %}
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Protein Target</div>
+            <div class="text-2xl font-bold text-emerald-600 mt-1">{{ '%.1f'|format(daily_totals.protein_g) }}g</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">Goal: {{ protein_target if protein_target is not none else '-' }}g / day</div>
+        </div>
+    </div>
+
+    <div class="space-y-6">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h2 class="font-semibold">Log Food</h2>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ selected_date }}</div>
+                </div>
+                <form action="/diet/food/add" method="POST" class="space-y-3">
+                    <input type="hidden" name="log_date" value="{{ selected_date }}">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 text-sm">
+                        <select id="savedMealSelect" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            <option value="">Use saved meal (optional)</option>
+                            {% for meal in saved_meals %}
+                            <option value="{{ meal.id }}"
+                                data-name="{{ meal.name|e }}"
+                                data-calories="{{ meal.calories }}"
+                                data-protein="{{ meal.protein_g }}"
+                                data-carbs="{{ meal.carbs_g }}"
+                                data-fat="{{ meal.fat_g }}">{{ meal.name }} · {{ '%.0f'|format(meal.calories) }} kcal</option>
+                            {% endfor %}
+                        </select>
+                        <button id="fillSavedMealBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded">Fill from saved meal</button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
+                        <select name="meal_type" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            <option value="breakfast">Breakfast</option>
+                            <option value="lunch">Lunch</option>
+                            <option value="dinner">Dinner</option>
+                            <option value="snack">Snack</option>
+                        </select>
+                        <input id="foodNameInput" type="text" name="food_name" required placeholder="Food name" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input id="foodCaloriesInput" type="number" name="calories" step="0.1" min="0" required placeholder="Calories" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input id="foodProteinInput" type="number" name="protein_g" step="0.1" min="0" placeholder="Protein (g)" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input id="foodCarbsInput" type="number" name="carbs_g" step="0.1" min="0" placeholder="Carbs (g)" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input id="foodFatInput" type="number" name="fat_g" step="0.1" min="0" placeholder="Fat (g)" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    </div>
+                    <textarea name="notes" rows="2" placeholder="Notes (optional)" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
+                    <div class="flex flex-wrap items-center gap-3 text-sm">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" name="save_as_custom" class="rounded border-gray-300 dark:border-gray-600">
+                            <span>Save as custom meal too</span>
+                        </label>
+                        <input type="text" name="custom_meal_name" placeholder="Custom meal name (optional)" class="flex-1 min-w-[220px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Add Food</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                <h2 class="font-semibold mb-4">Food Diary</h2>
+                <div class="space-y-4">
+                    {% for group in meal_groups %}
+                    <div class="rounded-lg border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between gap-3">
+                            <div class="font-medium text-sm">{{ group.label }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ '%.0f'|format(group.calories) }} kcal · {{ '%.1f'|format(group.protein_g) }}g protein</div>
+                        </div>
+                        {% if group['items'] %}
+                        <div class="divide-y divide-gray-100 dark:divide-gray-700/70">
+                            {% for item in group['items'] %}
+                            <div class="px-4 py-3 flex items-start justify-between gap-3 text-sm">
+                                <div>
+                                    <div class="font-medium">{{ item.food_name }}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ '%.0f'|format(item.calories) }} kcal · P {{ '%.1f'|format(item.protein_g) }}g · C {{ '%.1f'|format(item.carbs_g) }}g · F {{ '%.1f'|format(item.fat_g) }}g</div>
+                                    {% if item.notes %}<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ item.notes }}</div>{% endif %}
+                                </div>
+                                <form action="/diet/food/delete/{{ item.id }}" method="POST" onsubmit="return confirm('Delete this food entry?')">
+                                    <input type="hidden" name="log_date" value="{{ selected_date }}">
+                                    <button class="text-xs text-red-500 hover:text-red-700">Delete</button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">No foods logged in this meal yet.</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                    <h2 class="font-semibold mb-3">Deficit / Surplus Trend</h2>
+                    <canvas id="deficitChart" height="180"></canvas>
+                    <div id="deficitNoData" class="hidden text-xs text-gray-500 dark:text-gray-400 mt-2">Log food for multiple days to visualize deficit/surplus trend.</div>
+                </div>
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                    <h2 class="font-semibold mb-3">Protein Intake</h2>
+                    <canvas id="proteinChart" height="180"></canvas>
+                    <div id="proteinNoData" class="hidden text-xs text-gray-500 dark:text-gray-400 mt-2">Log food for multiple days to visualize protein trend.</div>
+                </div>
+            </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const deficitData = {{ deficit_chart|tojson }};
+const proteinData = {{ protein_chart|tojson }};
+
+function fillFoodFormFromSavedMeal() {
+    const select = document.getElementById('savedMealSelect');
+    if (!select) return;
+    const option = select.options[select.selectedIndex];
+    if (!option || !option.value) return;
+    document.getElementById('foodNameInput').value = option.dataset.name || '';
+    document.getElementById('foodCaloriesInput').value = option.dataset.calories || '';
+    document.getElementById('foodProteinInput').value = option.dataset.protein || '';
+    document.getElementById('foodCarbsInput').value = option.dataset.carbs || '';
+    document.getElementById('foodFatInput').value = option.dataset.fat || '';
+}
+
+const fillSavedMealBtn = document.getElementById('fillSavedMealBtn');
+if (fillSavedMealBtn) {
+    fillSavedMealBtn.addEventListener('click', fillFoodFormFromSavedMeal);
+}
+
+if (deficitData.length) {
+    new Chart(document.getElementById('deficitChart'), {
+        type: 'bar',
+        data: {
+            labels: deficitData.map(x => x.date),
+            datasets: [{
+                label: 'Net calories vs maintenance',
+                data: deficitData.map(x => x.net),
+                backgroundColor: deficitData.map(x => x.net < 0 ? '#ef444499' : x.net > 0 ? '#16a34a99' : '#9ca3af99'),
+                borderColor: deficitData.map(x => x.net < 0 ? '#ef4444' : x.net > 0 ? '#16a34a' : '#9ca3af'),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'bottom' } },
+            scales: {
+                y: { title: { display: true, text: 'Calories' } },
+                x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
+            }
+        }
+    });
+} else {
+    const deficitNoData = document.getElementById('deficitNoData');
+    if (deficitNoData) deficitNoData.classList.remove('hidden');
+}
+
+if (proteinData.length) {
+    new Chart(document.getElementById('proteinChart'), {
+        type: 'line',
+        data: {
+            labels: proteinData.map(x => x.date),
+            datasets: [
+                {
+                    label: 'Protein consumed (g)',
+                    data: proteinData.map(x => x.protein_g),
+                    borderColor: '#2563eb',
+                    backgroundColor: '#2563eb22',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.25,
+                    pointRadius: 3
+                },
+                {
+                    label: 'Protein target',
+                    data: proteinData.map(x => x.target_g),
+                    borderColor: '#f59e0b',
+                    borderDash: [6, 4],
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'bottom' } },
+            scales: {
+                y: { title: { display: true, text: 'Protein (g)' } },
+                x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 6 } }
+            }
+        }
+    });
+} else {
+    const proteinNoData = document.getElementById('proteinNoData');
+    if (proteinNoData) proteinNoData.classList.remove('hidden');
+}
+</script>
+{% endblock %}

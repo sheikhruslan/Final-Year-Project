@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Reviews{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold">📝 Reviews</h1>
+    <!-- Tabs -->
+    <div class="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+        {% for t, label in [('daily','Daily'),('weekly','Weekly'),('monthly','Monthly'),('yearly','Yearly')] %}
+        <a href="?tab={{ t }}" class="flex-1 py-2 px-4 rounded-md text-sm font-medium text-center transition-all {% if current_tab == t %}bg-white dark:bg-gray-700 shadow{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+    <!-- Write Review -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold mb-4">{{ current_tab|capitalize }} Review — {{ today }}</h3>
+        <form action="/reviews/save" method="POST" class="space-y-4">
+            <input type="hidden" name="review_type" value="{{ current_tab }}">
+            <input type="hidden" name="period_date" value="{{ today }}">
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">🏆 Wins</label>
+                <textarea name="wins" rows="3" placeholder="What went well?" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">{{ current_review.wins if current_review else '' }}</textarea>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">🔥 Challenges</label>
+                <textarea name="challenges" rows="3" placeholder="What was difficult?" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">{{ current_review.challenges if current_review else '' }}</textarea>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">💡 Lessons Learned</label>
+                <textarea name="lessons" rows="3" placeholder="What did you learn?" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">{{ current_review.lessons if current_review else '' }}</textarea>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">🎯 Goals for Next Period</label>
+                <textarea name="goals_for_next" rows="3" placeholder="What will you focus on?" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">{{ current_review.goals_for_next if current_review else '' }}</textarea>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Rating</label>
+                <div class="flex gap-1">
+                    {% for i in range(1,6) %}
+                    <label class="cursor-pointer">
+                        <input type="radio" name="rating" value="{{ i }}" class="hidden peer" {% if current_review and current_review.rating == i %}checked{% endif %}>
+                        <span class="text-2xl opacity-30 peer-checked:opacity-100 hover:opacity-70 transition-opacity">⭐</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <button class="bg-blue-600 text-white px-6 py-2 rounded text-sm w-full">Save Review</button>
+        </form>
+    </div>
+    <!-- Past Reviews -->
+    {% if reviews %}
+    <div class="space-y-3">
+        <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Past {{ current_tab|capitalize }} Reviews</h3>
+        {% for r in reviews %}
+        <details class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+            <summary class="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 flex justify-between items-center">
+                <span class="text-sm font-medium">{{ r.period_date }}</span>
+                <span>{% for i in range(r.rating or 0) %}⭐{% endfor %}</span>
+            </summary>
+            <div class="px-4 pb-4 space-y-2 text-sm">
+                {% if r.wins %}<div><span class="text-xs text-gray-500">Wins:</span><p>{{ r.wins }}</p></div>{% endif %}
+                {% if r.challenges %}<div><span class="text-xs text-gray-500">Challenges:</span><p>{{ r.challenges }}</p></div>{% endif %}
+                {% if r.lessons %}<div><span class="text-xs text-gray-500">Lessons:</span><p>{{ r.lessons }}</p></div>{% endif %}
+                {% if r.goals_for_next %}<div><span class="text-xs text-gray-500">Goals:</span><p>{{ r.goals_for_next }}</p></div>{% endif %}
+            </div>
+        </details>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

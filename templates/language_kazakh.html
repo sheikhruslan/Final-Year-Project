@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Kazakh{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">🇰🇿 Kazakh</h1>
+            <p class="text-sm text-gray-500">Topic-by-topic progress with clear completion visuals.</p>
+        </div>
+        <a href="/language" class="text-sm px-3 py-1.5 border rounded text-gray-600 hover:bg-gray-50">Back to Language</a>
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium">Overall Topic Progress</span>
+                <span class="text-sm text-gray-600">{{ kazakh_completed_topics }} / {{ kazakh_total_topics }}</span>
+            </div>
+            <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-700">
+                <div class="h-3 rounded-full bg-amber-500" style="width: {{ kazakh_overall_pct }}%"></div>
+            </div>
+            <div class="text-xs text-gray-500 mt-2">{{ kazakh_overall_pct }}% complete</div>
+        </div>
+
+        <form action="/language/kazakh/update" method="POST" class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700 space-y-3">
+            <h2 class="font-semibold">Manual Update</h2>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Current Topic</label>
+                <input type="number" name="current_topic" min="1" max="{{ kazakh_total_topics + 1 }}" value="{{ kazakh.current_topic if kazakh else 1 }}" class="w-full border rounded p-2 text-sm bg-gray-50 dark:bg-gray-900" />
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Current Page</label>
+                <input type="number" name="current_page" min="1" value="{{ kazakh.current_page if kazakh else 1 }}" class="w-full border rounded p-2 text-sm bg-gray-50 dark:bg-gray-900" />
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Notes</label>
+                <textarea name="notes" rows="2" class="w-full border rounded p-2 text-sm bg-gray-50 dark:bg-gray-900">{{ kazakh.notes if kazakh else '' }}</textarea>
+            </div>
+            <button class="w-full py-2 rounded bg-amber-600 text-white text-sm">Save Kazakh Progress</button>
+        </form>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-gray-100 dark:border-gray-700">
+        <h2 class="font-semibold mb-3">Topics</h2>
+        {% if topics %}
+        <div class="space-y-2">
+            {% for topic in topics %}
+            {% set done = kazakh and topic.topic_number < kazakh.current_topic %}
+            {% set current = kazakh and topic.topic_number == kazakh.current_topic %}
+            <div class="rounded-lg border p-3 flex items-center gap-3 {% if done %}border-green-200 bg-green-50 dark:bg-green-900/10{% elif current %}border-amber-300 bg-amber-50 dark:bg-amber-900/10{% else %}border-gray-200 dark:border-gray-700{% endif %}">
+                <div class="text-lg">{% if done %}✓{% elif current %}➜{% else %}○{% endif %}</div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium">{{ topic.topic_number }}. {{ topic.topic_name }}</div>
+                    <div class="text-xs text-gray-500">Starts p.{{ topic.page_start }}</div>
+                </div>
+                {% if not done %}
+                <form action="/language/kazakh/complete/{{ topic.topic_number }}" method="POST">
+                    <button class="px-3 py-1 rounded bg-gray-900 text-white text-xs">Mark Done</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500">No Kazakh topics found.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

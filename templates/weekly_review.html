@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Weekly Review{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold">🧭 Weekly Review</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ start_date }} to {{ end_date }}</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="/backup/database" class="text-xs bg-gray-900 text-white px-3 py-2 rounded">DB Backup</a>
+            <a href="/export/all" class="text-xs bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded">JSON Export</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Workouts</div><div class="text-2xl font-bold mt-1">{{ workouts_count }}</div><div class="text-xs text-gray-400 mt-1">{{ cardio_minutes }} cardio min</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Sleep</div><div class="text-2xl font-bold mt-1">{{ avg_sleep }}h</div><div class="text-xs text-gray-400 mt-1">avg per night</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Habits</div><div class="text-2xl font-bold mt-1">{{ habit_rate }}%</div><div class="text-xs text-gray-400 mt-1">completion rate</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Prayer</div><div class="text-2xl font-bold mt-1">{{ prayer_rate }}%</div><div class="text-xs text-gray-400 mt-1">completion rate</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Todos Done</div><div class="text-2xl font-bold mt-1">{{ completed_todos }}</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Journal Entries</div><div class="text-2xl font-bold mt-1">{{ journal_count }}</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Steps Total</div><div class="text-2xl font-bold mt-1">{{ steps_total }}</div></div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"><div class="text-xs text-gray-500">Hydration Days</div><div class="text-2xl font-bold mt-1">{{ water_goal_days }}</div><div class="text-xs text-gray-400 mt-1">days target met</div></div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">What Went Well</h2>
+            {% if wins %}
+            <div class="space-y-2 text-sm">
+                {% for item in wins %}<div class="rounded-lg bg-green-50 dark:bg-green-900/20 px-3 py-2 text-green-700 dark:text-green-300">{{ item }}</div>{% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400">No standout wins detected yet this week.</p>
+            {% endif %}
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">What Slipped</h2>
+            {% if slips %}
+            <div class="space-y-2 text-sm">
+                {% for item in slips %}<div class="rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-amber-700 dark:text-amber-300">{{ item }}</div>{% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400">No clear weak spots from the tracked data.</p>
+            {% endif %}
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Next Week Fixes</h2>
+            {% if next_steps %}
+            <div class="space-y-2 text-sm">
+                {% for item in next_steps %}<div class="rounded-lg bg-blue-50 dark:bg-blue-900/20 px-3 py-2 text-blue-700 dark:text-blue-300">{{ item }}</div>{% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400">Keep the same structure and tighten consistency.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Todos{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">📝 Todos</h1>
+        <div class="flex items-center gap-2">
+            <form method="GET" action="/todos">
+                <input type="hidden" name="filter" value="{{ current_filter }}">
+                <input type="hidden" name="sort" value="{{ current_sort }}">
+                <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-2">
+                    {% for value in [14, 30, 90, 180] %}
+                    <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d completed</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <button onclick="openTodoModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add Task</button>
+        </div>
+    </div>
+    <!-- Filters -->
+    <div class="flex flex-wrap gap-2 text-sm">
+        <span class="text-gray-500 dark:text-gray-400 py-1">Filter:</span>
+        {% for f, label in [('all','All'),('high','🔴 High'),('medium','🟡 Medium'),('low','🟢 Low'),('today','📅 Today'),('overdue','⚠️ Overdue'),('upcoming','🔮 Upcoming')] %}
+        <a href="?filter={{ f }}&sort={{ current_sort }}" class="px-3 py-1 rounded-full {% if current_filter == f %}bg-blue-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700{% endif %}">{{ label }}</a>
+        {% endfor %}
+        <span class="text-gray-300 dark:text-gray-600">|</span>
+        <span class="text-gray-500 dark:text-gray-400 py-1">Sort:</span>
+        <a href="?filter={{ current_filter }}&sort=priority" class="px-3 py-1 rounded-full {% if current_sort == 'priority' %}bg-blue-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300{% endif %}">Priority</a>
+        <a href="?filter={{ current_filter }}&sort=date" class="px-3 py-1 rounded-full {% if current_sort == 'date' %}bg-blue-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300{% endif %}">Date</a>
+    </div>
+    <!-- Pending -->
+    {% if pending %}
+    <div class="space-y-2">
+        {% for t in pending %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm flex items-center gap-3 border-l-4 {% if t.priority == 'high' %}border-red-500{% elif t.priority == 'medium' %}border-yellow-500{% else %}border-green-500{% endif %}">
+            <form action="/todos/complete/{{ t.id }}" method="POST">
+                <button class="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 hover:bg-green-500 hover:border-green-500 flex items-center justify-center text-transparent hover:text-white text-xs transition-all">✓</button>
+            </form>
+            <div class="flex-1">
+                <div class="font-medium text-sm">{{ t.title }}</div>
+                {% if t.description %}<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ t.description }}</div>{% endif %}
+            </div>
+            <div class="flex items-center gap-2 text-xs">
+                {% if t.due_date %}
+                <span class="{% if t.due_date < today %}text-red-500{% else %}text-gray-500 dark:text-gray-400{% endif %}">{{ t.due_date }}</span>
+                {% endif %}
+                {% if t.due_time %}<span class="text-gray-400">{{ t.due_time }}</span>{% endif %}
+                {% if t.category %}<span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{{ t.category }}</span>{% endif %}
+                <button type="button" onclick="openTodoModal({{ t.id|tojson }}, {{ t.title|tojson }}, {{ (t.description or '')|tojson }}, {{ t.priority|tojson }}, {{ (t.category or '')|tojson }}, {{ (t.due_date or '')|tojson }}, {{ (t.due_time or '')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
+                <form action="/todos/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete?')">
+                    <button class="text-gray-400 hover:text-red-500">🗑️</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16 text-gray-400"><p>No pending tasks{% if current_filter != 'all' %} matching this filter{% endif %}</p></div>
+    {% endif %}
+    <!-- Completed -->
+    {% if completed %}
+    <details class="mt-4">
+        <summary class="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">Completed ({{ completed|length }})</summary>
+        <div class="mt-2 space-y-1">
+            {% for t in completed %}
+            <div class="flex items-center gap-3 px-4 py-2 text-sm text-gray-400">
+                <span class="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-white text-xs">✓</span>
+                <span class="line-through">{{ t.title }}</span>
+                <form action="/todos/reopen/{{ t.id }}" method="POST" class="ml-auto">
+                    <button class="text-xs text-blue-600 dark:text-blue-400">Reopen</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+</div>
+<!-- Add Modal -->
+<div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 id="todoModalTitle" class="text-lg font-bold mb-4">Add Task</h3>
+        <form action="/todos/add" method="POST" class="space-y-3">
+            <input type="hidden" name="todo_id" id="todo_id">
+            <input type="text" name="title" id="todo_title" required placeholder="Task title" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <textarea name="description" id="todo_description" placeholder="Description" rows="2" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
+            <div class="grid grid-cols-2 gap-2">
+                <select name="priority" id="todo_priority" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    <option value="high">🔴 High</option>
+                    <option value="medium" selected>🟡 Medium</option>
+                    <option value="low">🟢 Low</option>
+                </select>
+                <input type="text" name="category" id="todo_category" placeholder="Category" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <input type="date" name="due_date" id="todo_due_date" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <input type="time" name="due_time" id="todo_due_time" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            </div>
+            <div class="flex gap-2">
+                <button id="todoSubmitBtn" type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Add</button>
+                <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const today = '{{ today if today is defined else "" }}';
+function openTodoModal(id='', title='', description='', priority='medium', category='', dueDate='', dueTime='') {
+    document.getElementById('todoModalTitle').textContent = id ? 'Edit Task' : 'Add Task';
+    document.getElementById('todoSubmitBtn').textContent = id ? 'Update' : 'Add';
+    document.getElementById('todo_id').value = id || '';
+    document.getElementById('todo_title').value = title || '';
+    document.getElementById('todo_description').value = description || '';
+    document.getElementById('todo_priority').value = priority || 'medium';
+    document.getElementById('todo_category').value = category || '';
+    document.getElementById('todo_due_date').value = dueDate || '';
+    document.getElementById('todo_due_time').value = dueTime || '';
+    document.getElementById('addModal').classList.remove('hidden');
+}
+
+{% if edit_todo %}
+openTodoModal({{ edit_todo.id }}, {{ edit_todo.title|tojson }}, {{ (edit_todo.description or '')|tojson }}, {{ edit_todo.priority|tojson }}, {{ (edit_todo.category or '')|tojson }}, {{ (edit_todo.due_date or '')|tojson }}, {{ (edit_todo.due_time or '')|tojson }});
+{% endif %}
+</script>
+{% endblock %}

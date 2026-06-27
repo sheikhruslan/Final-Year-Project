@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Language{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">🌍 Language</h1>
+        <form action="/language/reset" method="POST" onsubmit="return confirm('Reset ALL language progress? This cannot be undone.')">
+            <button class="text-sm text-red-500 hover:text-red-700 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded">Reset Progress</button>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <a href="/language/chinese" class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-emerald-100 dark:border-emerald-900/40 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">🇨🇳 Chinese (HSK)</h3>
+                <span class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">{{ chinese_summary.hsk_overall_pct }}%</span>
+            </div>
+            <p class="text-xs text-gray-500 mb-2">Current: HSK {{ chinese_summary.hsk_current_level }} · Module {{ chinese_summary.hsk_current_module }}/{{ chinese_summary.hsk_max_module }}</p>
+            <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 mb-2">
+                <div class="h-2 rounded-full bg-emerald-500" style="width: {{ chinese_summary.hsk_overall_pct }}%"></div>
+            </div>
+            <p class="text-xs text-gray-500">Approx vocab progress: {{ chinese_summary.hsk_vocab_progress }} / {{ chinese_summary.hsk_total_vocab_goal }}</p>
+        </a>
+
+        <a href="/language/arabic" class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-blue-100 dark:border-blue-900/40 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">🇸🇦 Arabic</h3>
+                <span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">{{ arabic_summary.arabic_overall_pct }}%</span>
+            </div>
+            <p class="text-xs text-gray-500 mb-2">Programs tracked: {{ arabic_summary.arabic_programs|length }}</p>
+            <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 mb-2">
+                <div class="h-2 rounded-full bg-blue-500" style="width: {{ arabic_summary.arabic_overall_pct }}%"></div>
+            </div>
+            <p class="text-xs text-gray-500">{{ arabic_summary.arabic_total_current }} / {{ arabic_summary.arabic_total_target }} days complete</p>
+        </a>
+
+        <a href="/language/kazakh" class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm border border-amber-100 dark:border-amber-900/40 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-semibold">🇰🇿 Kazakh</h3>
+                <span class="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">{{ kazakh_summary.kazakh_overall_pct }}%</span>
+            </div>
+            <p class="text-xs text-gray-500 mb-2">Topics complete: {{ kazakh_summary.kazakh_completed_topics }} / {{ kazakh_summary.kazakh_total_topics }}</p>
+            <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 mb-2">
+                <div class="h-2 rounded-full bg-amber-500" style="width: {{ kazakh_summary.kazakh_overall_pct }}%"></div>
+            </div>
+            <p class="text-xs text-gray-500">Current topic: {{ kazakh_summary.kazakh.current_topic if kazakh_summary.kazakh else 1 }}</p>
+        </a>
+    </div>
+</div>
+{% endblock %}

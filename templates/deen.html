@@ -1,0 +1,840 @@
+{% extends "base.html" %}
+{% block title %}Deen{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-2xl font-bold">🕌 Deen</h1>
+    <!-- Prayers -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold mb-4">Daily Prayers</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Times shown here use Umm al-Qura solar timings, ISNA-style Fajr, and Isha fixed at 90 minutes after Maghrib.</p>
+        <form id="prayer-form" action="/deen/prayers/save" method="POST">
+            <input type="hidden" name="prayer_date" value="{{ today }}">
+            <div class="grid grid-cols-5 gap-2">
+                {% for p in ['fajr','dhuhr','asr','maghrib','isha'] %}
+                <label class="flex flex-col items-center gap-2 p-3 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <input type="checkbox" name="{{ p }}" value="1" {% if prayers and prayers[p] %}checked{% endif %} class="prayer-checkbox w-5 h-5 rounded accent-green-600">
+                    <span class="text-xs font-medium capitalize">{{ p }}</span>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ prayer_times.get(p, '--:--') if prayer_times else '--:--' }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+    <!-- Adhkar -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm">
+        <h3 class="font-semibold mb-4">Daily Adhkar & Duas</h3>
+        <div class="grid grid-cols-4 gap-2 mb-4">
+            {% for atype, label, icon in [('morning_dua','Morning Dua','🤲'),('morning_adhkar','Morning Adhkar','🌅'),('evening_adhkar','Evening Adhkar','🌆'),('sleep_dua','Sleep Dua','🌙')] %}
+            <button type="button" id="adhkar-tab-{{ atype }}" onclick="showAdhkarPanel('{{ atype }}')" class="rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-3 text-center text-xs font-medium transition-colors hover:border-blue-300">
+                <div class="text-lg mb-1">{{ icon }}</div>
+                <div>{{ label }}</div>
+            </button>
+            {% endfor %}
+        </div>
+
+        <div class="space-y-3">
+            <div id="adhkar-morning_dua" class="adhkar-panel hidden rounded-xl border-2 transition-all {% if adhkar and adhkar['morning_dua'] %}bg-green-50 dark:bg-green-900/20 border-green-500{% else %}border-gray-200 dark:border-gray-700{% endif %}">
+                <div class="p-4 flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🤲</span>
+                        <div>
+                            <div class="font-medium">Morning Dua</div>
+                            <div id="adhkar-status-morning_dua" class="text-xs mt-1 {% if adhkar and adhkar['morning_dua'] %}text-green-600 dark:text-green-400{% else %}text-gray-400{% endif %}">{% if adhkar and adhkar['morning_dua'] %}✓ Done{% else %}Read then mark complete{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 pb-4 space-y-4">
+                    <div class="pt-4 space-y-4 text-sm">
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a after waking up · 1</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">All praise is for Allah who gave us life after having caused us to die, and to Him is the resurrection.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a after waking up · 2</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ، سُبْحَانَ اللَّهِ، وَالْحَمْدُ لِلَّهِ، وَلَا إِلَهَ إِلَّا اللَّهُ، وَاللَّهُ أَكْبَرُ، وَلَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">None has the right to be worshipped except Allah alone, without partner. To Him belongs the dominion and all praise, and He is over all things capable. Glory is to Allah, all praise is for Allah, none has the right to be worshipped except Allah, Allah is the Greatest, and there is no power nor strength except with Allah, the Most High, the Most Great.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a after waking up · 3</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">الْحَمْدُ لِلَّهِ الَّذِي عَافَانِي فِي جَسَدِي وَرَدَّ عَلَيَّ رُوحِي وَأَذِنَ لِي بِذِكْرِهِ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">All praise is for Allah who gave health to my body, returned my soul to me, and permitted me to remember Him.</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="toggleAdhkar('morning_dua')" id="adhkar-button-morning_dua" class="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700">{% if adhkar and adhkar['morning_dua'] %}Mark incomplete{% else %}Mark Morning Dua complete{% endif %}</button>
+                </div>
+            </div>
+
+            <div id="adhkar-morning_adhkar" class="adhkar-panel hidden rounded-xl border-2 transition-all {% if adhkar and adhkar['morning_adhkar'] %}bg-green-50 dark:bg-green-900/20 border-green-500{% else %}border-gray-200 dark:border-gray-700{% endif %}">
+                <div class="p-4 flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🌅</span>
+                        <div>
+                            <div class="font-medium">Morning Adhkar</div>
+                            <div id="adhkar-status-morning_adhkar" class="text-xs mt-1 {% if adhkar and adhkar['morning_adhkar'] %}text-green-600 dark:text-green-400{% else %}text-gray-400{% endif %}">{% if adhkar and adhkar['morning_adhkar'] %}✓ Done{% else %}Read then mark complete{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 pb-4 space-y-4">
+                    <div class="pt-4 space-y-4 text-sm">
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">1</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ بِكَ أَصْبَحْنَا وَبِكَ أَمْسَيْنَا وَبِكَ نَحْيَا وَبِكَ نَمُوتُ وَإِلَيْكَ النُّشُورُ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, by You we enter the morning and by You we enter the evening, by You we live and by You we die, and to You is the resurrection.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">2</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ رَبِّ الْعَالَمِينَ، اللَّهُمَّ إِنِّي أَسْأَلُكَ خَيْرَ هَذَا الْيَوْمِ: فَتْحَهُ، وَنَصْرَهُ، وَنُورَهُ، وَبَرَكَتَهُ، وَهُدَاهُ، وَأَعُوذُ بِكَ مِنْ شَرِّ مَا فِيهِ وَشَرِّ مَا بَعْدَهُ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">We have entered the morning and all sovereignty belongs to Allah, Lord of the worlds. O Allah, I ask You for the good of this day: its victory, help, light, blessing and guidance. I seek refuge in You from the evil within it and the evil after it.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">3</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">أَصْبَحْنَا عَلَى فِطْرَةِ الْإِسْلَامِ، وَعَلَى كَلِمَةِ الْإِخْلَاصِ، وَعَلَى دِينِ نَبِيِّنَا مُحَمَّدٍ ﷺ، وَعَلَى مِلَّةِ أَبِينَا إِبْرَاهِيمَ، حَنِيفًا مُسْلِمًا وَمَا كَانَ مِنَ الْمُشْرِكِينَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">We have entered the morning upon the natural religion of Islam, upon the word of sincerity, upon the religion of our Prophet Muhammad ﷺ, and upon the creed of our father Ibrahim, upright and Muslim, and he was not of the polytheists.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">4</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">100 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">سُبْحَانَ اللَّهِ وَبِحَمْدِهِ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">Glory is to Allah and praise is to Him.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">5</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ مَا أَصْبَحَ بِي مِنْ نِعْمَةٍ أَوْ بِأَحَدٍ مِنْ خَلْقِكَ فَمِنْكَ وَحْدَكَ لَا شَرِيكَ لَكَ، فَلَكَ الْحَمْدُ وَلَكَ الشُّكْرُ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, whatever blessing I or any of Your creation have entered the morning with is from You alone, without partner. So for You is all praise and unto You all thanks.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">6</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">7 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ، عَلَيْهِ تَوَكَّلْتُ، وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">Allah is sufficient for me. None has the right to be worshipped except Him. Upon Him I rely, and He is Lord of the Mighty Throne.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">7</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">3 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">رَضِيتُ بِاللَّهِ رَبًّا، وَبِالإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">I am pleased with Allah as Lord, with Islam as religion, and with Muhammad ﷺ as Prophet.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">8</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">يَا حَيُّ يَا قَيُّومُ بِرَحْمَتِكَ أَسْتَغِيثُ، أَصْلِحْ لِي شَأْنِي كُلَّهُ، وَلَا تَكِلْنِي إِلَى نَفْسِي طَرْفَةَ عَيْنٍ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Ever-Living, O Sustainer, by Your mercy I seek relief. Rectify all of my affairs and do not leave me to myself even for the blink of an eye.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">9</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">We have entered the morning and all dominion belongs to Allah, and praise belongs to Allah. None has the right to be worshipped except Allah alone without partner. His is the dominion, His is the praise, and He has power over all things.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">10</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">4 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ إِنِّي أَصْبَحْتُ أُشْهِدُكَ وَأُشْهِدُ حَمَلَةَ عَرْشِكَ وَمَلَائِكَتَكَ وَجَمِيعَ خَلْقِكَ أَنَّكَ أَنْتَ اللَّهُ لَا إِلَهَ إِلَّا أَنْتَ وَحْدَكَ لَا شَرِيكَ لَكَ، وَأَنَّ مُحَمَّدًا عَبْدُكَ وَرَسُولُكَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, I have entered the morning calling You to witness, and the bearers of Your Throne, Your angels, and all Your creation, that You are Allah, none has the right to be worshipped except You alone without partner, and that Muhammad is Your servant and Messenger.</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="toggleAdhkar('morning_adhkar')" id="adhkar-button-morning_adhkar" class="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700">{% if adhkar and adhkar['morning_adhkar'] %}Mark incomplete{% else %}Mark Morning Adhkar complete{% endif %}</button>
+                </div>
+            </div>
+
+            <div id="adhkar-evening_adhkar" class="adhkar-panel hidden rounded-xl border-2 transition-all {% if adhkar and adhkar['evening_adhkar'] %}bg-green-50 dark:bg-green-900/20 border-green-500{% else %}border-gray-200 dark:border-gray-700{% endif %}">
+                <div class="p-4 flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🌆</span>
+                        <div>
+                            <div class="font-medium">Evening Adhkar</div>
+                            <div id="adhkar-status-evening_adhkar" class="text-xs mt-1 {% if adhkar and adhkar['evening_adhkar'] %}text-green-600 dark:text-green-400{% else %}text-gray-400{% endif %}">{% if adhkar and adhkar['evening_adhkar'] %}✓ Done{% else %}Read then mark complete{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 pb-4 space-y-4">
+                    <div class="pt-4 space-y-4 text-sm">
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">1</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ بِكَ أَمْسَيْنَا وَبِكَ أَصْبَحْنَا وَبِكَ نَحْيَا وَبِكَ نَمُوتُ وَإِلَيْكَ الْمَصِيرُ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, by You we enter the evening and by You we enter the morning, by You we live and by You we die, and to You is the final return.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">2</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ رَبِّ الْعَالَمِينَ، اللَّهُمَّ إِنِّي أَسْأَلُكَ خَيْرَ هَذِهِ اللَّيْلَةِ: فَتْحَهَا، وَنَصْرَهَا، وَنُورَهَا، وَبَرَكَتَهَا، وَهُدَاهَا، وَأَعُوذُ بِكَ مِنْ شَرِّ مَا فِيهَا وَشَرِّ مَا بَعْدَهَا</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">We have entered the evening and all sovereignty belongs to Allah, Lord of the worlds. O Allah, I ask You for the good of this night: its victory, help, light, blessing and guidance. I seek refuge in You from the evil within it and the evil after it.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">3</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">أَمْسَيْنَا عَلَى فِطْرَةِ الْإِسْلَامِ، وَعَلَى كَلِمَةِ الْإِخْلَاصِ، وَعَلَى دِينِ نَبِيِّنَا مُحَمَّدٍ ﷺ، وَعَلَى مِلَّةِ أَبِينَا إِبْرَاهِيمَ، حَنِيفًا مُسْلِمًا وَمَا كَانَ مِنَ الْمُشْرِكِينَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">We have entered the evening upon the natural religion of Islam, upon the word of sincerity, upon the religion of our Prophet Muhammad ﷺ, and upon the creed of our father Ibrahim, upright and Muslim, and he was not of the polytheists.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">4</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">100 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">سُبْحَانَ اللَّهِ وَبِحَمْدِهِ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">Glory is to Allah and praise is to Him.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">5</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ مَا أَمْسَى بِي مِنْ نِعْمَةٍ أَوْ بِأَحَدٍ مِنْ خَلْقِكَ فَمِنْكَ وَحْدَكَ لَا شَرِيكَ لَكَ، فَلَكَ الْحَمْدُ وَلَكَ الشُّكْرُ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, whatever blessing I or any of Your creation have entered the evening with is from You alone, without partner. So for You is all praise and unto You all thanks.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">6</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">7 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ، عَلَيْهِ تَوَكَّلْتُ، وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">Allah is sufficient for me. None has the right to be worshipped except Him. Upon Him I rely, and He is Lord of the Mighty Throne.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">7</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">3 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">رَضِيتُ بِاللَّهِ رَبًّا، وَبِالإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">I am pleased with Allah as Lord, with Islam as religion, and with Muhammad ﷺ as Prophet.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">8</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">يَا حَيُّ يَا قَيُّومُ بِرَحْمَتِكَ أَسْتَغِيثُ، أَصْلِحْ لِي شَأْنِي كُلَّهُ، وَلَا تَكِلْنِي إِلَى نَفْسِي طَرْفَةَ عَيْنٍ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Ever-Living, O Sustainer, by Your mercy I seek relief. Rectify all of my affairs and do not leave me to myself even for the blink of an eye.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">9</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">We have entered the evening and all dominion belongs to Allah, and praise belongs to Allah. None has the right to be worshipped except Allah alone without partner. His is the dominion, His is the praise, and He has power over all things.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">10</div>
+                                <span class="text-[11px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-300">4 times</span>
+                            </div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ إِنِّي أَمْسَيْتُ أُشْهِدُكَ وَأُشْهِدُ حَمَلَةَ عَرْشِكَ وَمَلَائِكَتَكَ وَجَمِيعَ خَلْقِكَ أَنَّكَ أَنْتَ اللَّهُ لَا إِلَهَ إِلَّا أَنْتَ وَحْدَكَ لَا شَرِيكَ لَكَ، وَأَنَّ مُحَمَّدًا عَبْدُكَ وَرَسُولُكَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, I have entered the evening calling You to witness, and the bearers of Your Throne, Your angels, and all Your creation, that You are Allah, none has the right to be worshipped except You alone without partner, and that Muhammad is Your servant and Messenger.</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="toggleAdhkar('evening_adhkar')" id="adhkar-button-evening_adhkar" class="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700">{% if adhkar and adhkar['evening_adhkar'] %}Mark incomplete{% else %}Mark Evening Adhkar complete{% endif %}</button>
+                </div>
+            </div>
+
+            <div id="adhkar-sleep_dua" class="adhkar-panel hidden rounded-xl border-2 transition-all {% if adhkar and adhkar['sleep_dua'] %}bg-green-50 dark:bg-green-900/20 border-green-500{% else %}border-gray-200 dark:border-gray-700{% endif %}">
+                <div class="p-4 flex items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🌙</span>
+                        <div>
+                            <div class="font-medium">Sleep Dua</div>
+                            <div id="adhkar-status-sleep_dua" class="text-xs mt-1 {% if adhkar and adhkar['sleep_dua'] %}text-green-600 dark:text-green-400{% else %}text-gray-400{% endif %}">{% if adhkar and adhkar['sleep_dua'] %}✓ Done{% else %}Read then mark complete{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-4 pb-4 space-y-4">
+                    <div class="pt-4 space-y-4 text-sm">
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a before sleeping · 1</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">In Your name, O Allah, I die and I live.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a before sleeping · 2</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, protect me from Your punishment on the Day You resurrect Your servants.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a before sleeping · 3</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ بِاسْمِكَ أَمُوتُ وَأَحْيَا</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, in Your name I die and I live.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a before sleeping · 4</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">جَعَلْتُ ظَهْرِي إِلَيْكَ، وَفَوَّضْتُ أَمْرِي إِلَيْكَ، وَأَلْجَأْتُ ظَهْرِي إِلَيْكَ، رَغْبَةً وَرَهْبَةً إِلَيْكَ، لَا مَلْجَأَ وَلَا مَنْجَا مِنْكَ إِلَّا إِلَيْكَ، آمَنْتُ بِكِتَابِكَ الَّذِي أَنْزَلْتَ، وَبِنَبِيِّكَ الَّذِي أَرْسَلْتَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">I have placed my back against You, entrusted my affair to You, and relied upon You, out of desire and fear of You. There is no refuge and no escape from You except to You. I believe in Your Book which You revealed and in Your Prophet whom You sent.</p>
+                        </div>
+                        <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4">
+                            <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Du‘a before sleeping · 5</div>
+                            <div dir="rtl" class="text-right text-lg leading-8 font-medium">اللَّهُمَّ أَسْلَمْتُ نَفْسِي إِلَيْكَ، وَفَوَّضْتُ أَمْرِي إِلَيْكَ، وَوَجَّهْتُ وَجْهِي إِلَيْكَ، وَأَلْجَأْتُ ظَهْرِي إِلَيْكَ، رَغْبَةً وَرَهْبَةً إِلَيْكَ، لَا مَلْجَأَ وَلَا مَنْجَا مِنْكَ إِلَّا إِلَيْكَ، آمَنْتُ بِكِتَابِكَ الَّذِي أَنْزَلْتَ، وَبِنَبِيِّكَ الَّذِي أَرْسَلْتَ</div>
+                            <p class="mt-3 text-gray-600 dark:text-gray-300">O Allah, I submit my soul to You, entrust my affair to You, turn my face to You, and rely upon You, in hope and fear of You. There is no refuge and no escape from You except to You. I believe in Your Book which You revealed and in Your Prophet whom You sent.</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="toggleAdhkar('sleep_dua')" id="adhkar-button-sleep_dua" class="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700">{% if adhkar and adhkar['sleep_dua'] %}Mark incomplete{% else %}Mark Sleep Dua complete{% endif %}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Quran Section Tabs -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <div class="flex border-b border-gray-100 dark:border-gray-700">
+            {% for tab, label in [('memorization','📖 Memorization'),('reading','📚 Reading'),('tafseer','🔍 Tafseer')] %}
+            <button type="button" onclick="switchQuranTab('{{ tab }}')" id="qtab-{{ tab }}" class="flex-1 py-3 text-sm font-medium transition-colors quran-tab {% if loop.first %}border-b-2 border-blue-600 text-blue-600{% else %}text-gray-500 dark:text-gray-400 hover:text-gray-700{% endif %}">{{ label }}</button>
+            {% endfor %}
+        </div>
+        <!-- Memorization -->
+        <div id="qpanel-memorization" class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-sm text-gray-500 dark:text-gray-400">Track ayah-by-ayah memorization progress</span>
+                <span class="text-sm font-medium" id="memStats">Loading...</span>
+            </div>
+            <!-- Juz Selector -->
+            <div class="mb-4">
+                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Select Juz</label>
+                <select id="juzSelect" onchange="loadJuzSurahs()" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm w-full">
+                    {% for j in range(1, 31) %}
+                    <option value="{{ j }}">Juz {{ j }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- Surah List for Selected Juz -->
+            <div id="surahList" class="space-y-2"></div>
+            <!-- Ayah Checklist (loads when surah selected) -->
+            <div id="ayahPanel" class="hidden mt-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="font-medium text-sm" id="surahTitle"></h4>
+                    <span class="text-xs text-gray-500" id="surahProgress"></span>
+                </div>
+                <div id="ayahGrid" class="flex flex-wrap gap-1.5"></div>
+            </div>
+        </div>
+        <!-- Reading -->
+        <div id="qpanel-reading" class="p-6 hidden">
+            <h4 class="font-medium text-sm mb-4">Log Quran Reading (Goal: 1 Juz/Day)</h4>
+            {% if suggested_range %}
+            <div class="mb-4 rounded-lg border border-blue-200 dark:border-blue-700/40 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
+                <div class="font-medium text-blue-700 dark:text-blue-300">Today's target: Juz {{ suggested_juz }}</div>
+                <div class="text-xs text-blue-700/80 dark:text-blue-300/80 mt-1">
+                    Surah {{ suggested_range.from_surah }}:{{ suggested_range.from_ayah }} → Surah {{ suggested_range.to_surah }}:{{ suggested_range.to_ayah }}
+                </div>
+            </div>
+            {% endif %}
+            <form action="/deen/quran/reading/add" method="POST" class="space-y-3">
+                <input type="hidden" name="reading_date" value="{{ today }}">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">From Surah</label>
+                        <select name="from_surah" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                            {% for s in surahs %}<option value="{{ s.id }}" {% if suggested_range and s.id == suggested_range.from_surah %}selected{% endif %}>{{ s.id }}. {{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">From Ayah</label>
+                        <input type="number" name="from_ayah" min="1" value="{{ suggested_range.from_ayah if suggested_range else 1 }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">To Surah</label>
+                        <select name="to_surah" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                            {% for s in surahs %}<option value="{{ s.id }}" {% if suggested_range and s.id == suggested_range.to_surah %}selected{% endif %}>{{ s.id }}. {{ s.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">To Ayah</label>
+                        <input type="number" name="to_ayah" min="1" value="{{ suggested_range.to_ayah if suggested_range else 1 }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Juz</label>
+                    <input type="number" name="juz_number" min="1" max="30" value="{{ suggested_juz }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                </div>
+                <button class="bg-green-600 text-white px-4 py-2 rounded text-sm w-full">Mark Juz {{ suggested_juz }} Complete</button>
+            </form>
+            {% if readings %}
+            <div class="mt-4 space-y-2">
+                <h4 class="text-xs text-gray-500 font-medium">Recent Readings</h4>
+                {% for r in readings %}
+                <div class="text-sm p-2 bg-gray-50 dark:bg-gray-900 rounded">{{ r.reading_date }} — Juz {{ r.juz_number or '?' }}: Surah {{ r.from_surah }}:{{ r.from_ayah }} → {{ r.to_surah }}:{{ r.to_ayah }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        <!-- Tafseer -->
+        <div id="qpanel-tafseer" class="p-6 hidden">
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Track Revealed App progress: Concise · Deeper Look · Audio</p>
+            <div class="mb-4">
+                <select id="tafseerSurah" onchange="loadTafseer()" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    {% for s in surahs %}<option value="{{ s.id }}">{{ s.id }}. {{ s.name }} ({{ s.ayah_count }} ayahs)</option>{% endfor %}
+                </select>
+            </div>
+            <div id="tafseerGrid" class="space-y-1"></div>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        <h2 class="text-lg font-semibold">Deen Visualizations</h2>
+
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="text-sm font-semibold mb-3">Memorization</h3>
+                <div class="h-64">
+                    <canvas id="memorizationChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="text-sm font-semibold mb-3">Reading</h3>
+                <div class="h-64">
+                    <canvas id="readingChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="text-sm font-semibold mb-3">Tafseer</h3>
+                <div class="h-64">
+                    <canvas id="tafseerChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="text-sm font-semibold mb-3">Prayers</h3>
+                <div class="h-64">
+                    <canvas id="prayersChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+                <h3 class="text-sm font-semibold mb-3">Adhkar</h3>
+                <div class="h-64">
+                    <canvas id="adhkarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const surahs = {{ surahs_json|safe }};
+const readingLabels = [{% for r in readings|reverse %}'{{ r.reading_date }}'{% if not loop.last %}, {% endif %}{% endfor %}];
+const readingValues = [{% for r in readings|reverse %}{{ r.juz_number or 0 }}{% if not loop.last %}, {% endif %}{% endfor %}];
+const todayDate = '{{ today }}';
+const prayerHistoryLabels = {{ prayer_history_labels|tojson }};
+const prayerHistoryValues = {{ prayer_history_values|tojson }};
+const adhkarHistoryLabels = {{ adhkar_history_labels|tojson }};
+const adhkarHistoryValues = {{ adhkar_history_values|tojson }};
+const prayerKeys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+const prayerLabels = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+const adhkarKeys = ['morning_dua', 'morning_adhkar', 'evening_adhkar', 'sleep_dua'];
+const adhkarLabels = ['Morning Dua', 'Morning Adhkar', 'Evening Adhkar', 'Sleep Dua'];
+
+let memorizationChart;
+let readingChart;
+let tafseerChart;
+let prayersChart;
+let adhkarChart;
+let activeAdhkarPanel = null;
+
+function initCharts() {
+    const chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 2,
+        plugins: { legend: { labels: { boxWidth: 10 } } }
+    };
+
+    memorizationChart = new Chart(document.getElementById('memorizationChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Memorized', 'Remaining'],
+            datasets: [{ data: [0, 1], backgroundColor: ['#16a34a', '#e5e7eb'] }]
+        },
+        options: chartDefaults
+    });
+
+    readingChart = new Chart(document.getElementById('readingChart'), {
+        type: 'bar',
+        data: {
+            labels: readingLabels.length ? readingLabels : ['No data'],
+            datasets: [{
+                label: 'Juz Completed',
+                data: readingValues.length ? readingValues : [0],
+                backgroundColor: '#0ea5e9',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            ...chartDefaults,
+            scales: { y: { beginAtZero: true, max: 30, ticks: { stepSize: 5 } } }
+        }
+    });
+
+    tafseerChart = new Chart(document.getElementById('tafseerChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Concise', 'Deeper Look', 'Audio'],
+            datasets: [{
+                label: 'Completion %',
+                data: [0, 0, 0],
+                backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b'],
+                borderRadius: 6
+            }]
+        },
+        options: {
+            ...chartDefaults,
+            scales: { y: { beginAtZero: true, max: 100 } }
+        }
+    });
+
+    prayersChart = new Chart(document.getElementById('prayersChart'), {
+        type: 'line',
+        data: {
+            labels: prayerHistoryLabels,
+            datasets: [{
+                label: 'Prayers Completed',
+                data: prayerHistoryValues,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16,185,129,0.2)',
+                tension: 0.25,
+                fill: true,
+                pointRadius: 3
+            }]
+        },
+        options: {
+            ...chartDefaults,
+            scales: { y: { beginAtZero: true, max: 5, ticks: { stepSize: 1 } } }
+        }
+    });
+
+    adhkarChart = new Chart(document.getElementById('adhkarChart'), {
+        type: 'line',
+        data: {
+            labels: adhkarHistoryLabels,
+            datasets: [{
+                label: 'Adhkar Completed',
+                data: adhkarHistoryValues,
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139,92,246,0.2)',
+                tension: 0.25,
+                fill: true,
+                pointRadius: 3
+            }]
+        },
+        options: {
+            ...chartDefaults,
+            scales: { y: { beginAtZero: true, max: 4, ticks: { stepSize: 1 } } }
+        }
+    });
+}
+
+function upsertTodayCountPoint(chart, todayCount) {
+    if (!chart) return;
+    const labels = chart.data.labels || [];
+    const values = chart.data.datasets[0].data || [];
+    if (labels.length && labels[labels.length - 1] === todayDate) {
+        values[values.length - 1] = todayCount;
+    } else if (!labels.length) {
+        chart.data.labels = [todayDate];
+        chart.data.datasets[0].data = [todayCount];
+    } else {
+        labels.push(todayDate);
+        values.push(todayCount);
+    }
+    chart.update();
+}
+
+function getAdhkarDone(type) {
+    const el = document.getElementById('adhkar-' + type);
+    return !!(el && el.classList.contains('border-green-500'));
+}
+
+function showAdhkarPanel(type) {
+    const isSamePanel = activeAdhkarPanel === type;
+    activeAdhkarPanel = isSamePanel ? null : type;
+
+    document.querySelectorAll('.adhkar-panel').forEach((panel) => {
+        const shouldShow = activeAdhkarPanel && panel.id === 'adhkar-' + activeAdhkarPanel;
+        panel.classList.toggle('hidden', !shouldShow);
+    });
+
+    adhkarKeys.forEach((key) => {
+        const tab = document.getElementById('adhkar-tab-' + key);
+        if (!tab) return;
+        const active = key === activeAdhkarPanel;
+        tab.classList.toggle('border-blue-500', active);
+        tab.classList.toggle('bg-blue-50', active);
+        tab.classList.toggle('text-blue-700', active);
+        tab.classList.toggle('dark:border-blue-400', active);
+        tab.classList.toggle('dark:bg-blue-900/30', active);
+        tab.classList.toggle('dark:text-blue-300', active);
+        tab.classList.toggle('border-gray-200', !active);
+        tab.classList.toggle('dark:border-gray-700', !active);
+    });
+}
+
+function setAdhkarState(type, completed) {
+    const panel = document.getElementById('adhkar-' + type);
+    const status = document.getElementById('adhkar-status-' + type);
+    const button = document.getElementById('adhkar-button-' + type);
+    if (!panel || !status || !button) return;
+
+    panel.classList.toggle('bg-green-50', completed);
+    panel.classList.toggle('dark:bg-green-900/20', completed);
+    panel.classList.toggle('border-green-500', completed);
+    panel.classList.toggle('border-gray-200', !completed);
+    panel.classList.toggle('dark:border-gray-700', !completed);
+
+    status.textContent = completed ? '✓ Done' : 'Tap to open';
+    status.classList.toggle('text-green-600', completed);
+    status.classList.toggle('dark:text-green-400', completed);
+    status.classList.toggle('text-gray-400', !completed);
+
+    button.textContent = completed
+        ? 'Mark incomplete'
+        : `Mark ${adhkarLabels[adhkarKeys.indexOf(type)]} complete`;
+}
+
+function loadTafseerGlobalStats() {
+    fetch('/deen/tafseer/stats').then(r => r.json()).then(stats => {
+        if (!tafseerChart) return;
+        tafseerChart.data.datasets[0].data = [
+            stats.concise_pct || 0,
+            stats.deeper_pct || 0,
+            stats.audio_pct || 0
+        ];
+        tafseerChart.update();
+    });
+}
+
+function updatePrayersChartFromForm() {
+    if (!prayersChart) return;
+    const completedToday = prayerKeys.reduce((sum, key) => {
+        const input = document.querySelector(`input[name="${key}"]`);
+        return sum + ((input && input.checked) ? 1 : 0);
+    }, 0);
+    upsertTodayCountPoint(prayersChart, completedToday);
+}
+
+function updateAdhkarChart() {
+    if (!adhkarChart) return;
+    const completedToday = adhkarKeys.reduce((sum, key) => sum + (getAdhkarDone(key) ? 1 : 0), 0);
+    upsertTodayCountPoint(adhkarChart, completedToday);
+}
+
+function updateMemorizationChart(memorized, total) {
+    if (!memorizationChart) return;
+    const remaining = Math.max(total - memorized, 0);
+    memorizationChart.data.datasets[0].data = total > 0 ? [memorized, remaining] : [0, 1];
+    memorizationChart.update();
+}
+
+function updateTafseerChart(data, ayahCount) {
+    if (!tafseerChart) return;
+    if (!ayahCount) {
+        tafseerChart.data.datasets[0].data = [0, 0, 0];
+        tafseerChart.update();
+        return;
+    }
+    let conciseDone = 0;
+    let deeperDone = 0;
+    let audioDone = 0;
+    data.forEach(item => {
+        if (item.concise_done) conciseDone += 1;
+        if (item.deeper_look_done) deeperDone += 1;
+        if (item.audio_done) audioDone += 1;
+    });
+    tafseerChart.data.datasets[0].data = [
+        Math.round((conciseDone / ayahCount) * 100),
+        Math.round((deeperDone / ayahCount) * 100),
+        Math.round((audioDone / ayahCount) * 100)
+    ];
+    tafseerChart.update();
+}
+
+function toggleAdhkar(type) {
+    fetch('/deen/adhkar/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:type, date:'{{ today }}'})})
+    .then(r=>r.json()).then(d=>{
+        setAdhkarState(type, d.completed);
+        updateAdhkarChart();
+    });
+}
+
+function serializePrayerForm() {
+    const form = document.getElementById('prayer-form');
+    const data = new URLSearchParams();
+    data.set('prayer_date', form.querySelector('input[name="prayer_date"]').value);
+    prayerKeys.forEach((key) => {
+        const input = form.querySelector(`input[name="${key}"]`);
+        if (input && input.checked) {
+            data.set(key, '1');
+        }
+    });
+    return data;
+}
+
+function autosavePrayers() {
+    return fetch('/deen/prayers/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: serializePrayerForm().toString()
+    }).then(() => {
+        updatePrayersChartFromForm();
+    });
+}
+
+function switchQuranTab(tab) {
+    document.querySelectorAll('.quran-tab').forEach(t=>{t.classList.remove('border-b-2','border-blue-600','text-blue-600'); t.classList.add('text-gray-500');});
+    document.getElementById('qtab-'+tab).classList.add('border-b-2','border-blue-600','text-blue-600');
+    document.getElementById('qtab-'+tab).classList.remove('text-gray-500');
+    ['memorization','reading','tafseer'].forEach(p=>document.getElementById('qpanel-'+p).classList.toggle('hidden', p!==tab));
+}
+function renderSurahCard(surah, memorizedCount, completionPct) {
+    const isComplete = completionPct === 100;
+    const statusText = isComplete
+        ? 'Complete'
+        : (memorizedCount > 0 ? `${completionPct}%` : 'Not started');
+    const cardClasses = isComplete
+        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+        : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 hover:bg-blue-50 dark:hover:bg-blue-900/20';
+    const progressBar = memorizedCount > 0 && !isComplete
+        ? `<div class="mt-2 w-full h-1.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 overflow-hidden">
+            <div id="surah-progress-fill-${surah.id}" class="h-full bg-yellow-400" style="width:${completionPct}%"></div>
+        </div>`
+        : '';
+    return `<button onclick="loadAyahs(${surah.id}, '${surah.name}', ${surah.ayah_count})" id="surah-card-${surah.id}" class="w-full text-left p-3 rounded-lg border transition-colors text-sm flex justify-between items-center ${cardClasses}">
+            <div class="min-w-0">
+                <div class="truncate">${surah.id}. ${surah.name}</div>
+                <div id="surah-status-${surah.id}" class="text-xs mt-1 ${isComplete ? 'text-green-700 dark:text-green-300' : 'text-gray-500'}">${statusText}</div>
+                ${progressBar}
+            </div>
+            <span id="surah-count-${surah.id}" class="text-xs text-gray-400 ml-2">${memorizedCount}/${surah.ayah_count}</span>
+        </button>`;
+}
+
+function updateSurahCardProgress(surahId, memorizedCount, totalAyahs) {
+    const completionPct = totalAyahs > 0 ? Math.round((memorizedCount / totalAyahs) * 100) : 0;
+    const card = document.getElementById(`surah-card-${surahId}`);
+    const status = document.getElementById(`surah-status-${surahId}`);
+    const count = document.getElementById(`surah-count-${surahId}`);
+    if (!card || !status || !count) return;
+
+    count.textContent = `${memorizedCount}/${totalAyahs}`;
+    if (completionPct === 100) {
+        status.textContent = 'Complete';
+        status.className = 'text-xs mt-1 text-green-700 dark:text-green-300';
+        card.classList.remove('border-gray-200', 'dark:border-gray-700', 'bg-gray-50', 'dark:bg-gray-900');
+        card.classList.add('border-green-500', 'bg-green-50', 'dark:bg-green-900/20');
+        const fill = document.getElementById(`surah-progress-fill-${surahId}`);
+        if (fill && fill.parentElement) {
+            fill.parentElement.remove();
+        }
+        return;
+    }
+
+    if (memorizedCount > 0) {
+        status.textContent = `${completionPct}%`;
+    } else {
+        status.textContent = 'Not started';
+    }
+
+    if (!card.classList.contains('border-green-500')) {
+        card.classList.add('border-gray-200', 'dark:border-gray-700', 'bg-gray-50', 'dark:bg-gray-900');
+    }
+
+    let fill = document.getElementById(`surah-progress-fill-${surahId}`);
+    if (!fill && memorizedCount > 0) {
+        const bar = document.createElement('div');
+        bar.className = 'mt-2 w-full h-1.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 overflow-hidden';
+        bar.innerHTML = `<div id="surah-progress-fill-${surahId}" class="h-full bg-yellow-400" style="width:${completionPct}%"></div>`;
+        status.insertAdjacentElement('afterend', bar);
+        return;
+    }
+    if (fill) {
+        fill.style.width = `${completionPct}%`;
+        if (memorizedCount === 0 && fill.parentElement) {
+            fill.parentElement.remove();
+        }
+    }
+}
+
+async function loadJuzSurahs() {
+    const juz = document.getElementById('juzSelect').value;
+    const filtered = surahs.filter(s => s.juz == juz);
+    const container = document.getElementById('surahList');
+    const cards = await Promise.all(filtered.map(async (s) => {
+        try {
+            const data = await fetch(`/deen/quran/memorization/${s.id}`).then(r => r.json());
+            const memorizedCount = data.filter(a => a.memorized).length;
+            const completionPct = s.ayah_count > 0 ? Math.round((memorizedCount / s.ayah_count) * 100) : 0;
+            return renderSurahCard(s, memorizedCount, completionPct);
+        } catch (e) {
+            return renderSurahCard(s, 0, 0);
+        }
+    }));
+    container.innerHTML = cards.join('');
+    document.getElementById('ayahPanel').classList.add('hidden');
+}
+function loadAyahs(surahId, name, count) {
+    document.getElementById('ayahPanel').classList.remove('hidden');
+    document.getElementById('surahTitle').textContent = name;
+    fetch(`/deen/quran/memorization/${surahId}`).then(r=>r.json()).then(data=>{
+        const memorized = data.filter(a=>a.memorized).length;
+        document.getElementById('surahProgress').textContent = `${memorized}/${count} memorized`;
+        const grid = document.getElementById('ayahGrid');
+        grid.innerHTML = data.map(a=>
+            `<button onclick="toggleAyah(${surahId},${a.ayah})" class="w-8 h-8 rounded text-xs font-medium transition-all ${a.memorized ? 'bg-green-500 text-white':'bg-gray-200 dark:bg-gray-700 hover:bg-green-200 dark:hover:bg-green-800'}" id="ayah-${surahId}-${a.ayah}">${a.ayah}</button>`
+        ).join('');
+    });
+}
+function toggleAyah(surahId, ayah) {
+    fetch('/deen/quran/memorization/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({surah_id:surahId, ayah_number:ayah})})
+    .then(r=>r.json()).then(d=>{
+        const btn = document.getElementById(`ayah-${surahId}-${ayah}`);
+        if(d.memorized){btn.className='w-8 h-8 rounded text-xs font-medium transition-all bg-green-500 text-white';}
+        else{btn.className='w-8 h-8 rounded text-xs font-medium transition-all bg-gray-200 dark:bg-gray-700 hover:bg-green-200 dark:hover:bg-green-800';}
+        const ayahButtons = Array.from(document.querySelectorAll(`[id^="ayah-${surahId}-"]`));
+        const totalAyahs = ayahButtons.length;
+        const memorizedCount = ayahButtons.filter(b => b.className.includes('bg-green-500')).length;
+        document.getElementById('surahProgress').textContent = `${memorizedCount}/${totalAyahs} memorized`;
+        updateSurahCardProgress(surahId, memorizedCount, totalAyahs);
+        loadMemStats();
+    });
+}
+function loadMemStats() {
+    fetch('/deen/quran/memorization-stats').then(r=>r.json()).then(d=>{
+        document.getElementById('memStats').textContent=`${d.memorized}/${d.total} ayahs (${d.pct}%)`;
+        updateMemorizationChart(d.memorized, d.total);
+    });
+}
+function loadTafseer() {
+    const surahId = document.getElementById('tafseerSurah').value;
+    const surah = surahs.find(s => s.id == surahId);
+    fetch(`/deen/tafseer/${surahId}`).then(r=>r.json()).then(data=>{
+        const grid = document.getElementById('tafseerGrid');
+        let html = '<div class="grid grid-cols-4 gap-1 text-xs text-center text-gray-500 dark:text-gray-400 mb-2"><div>Ayah</div><div>Concise</div><div>Deeper Look</div><div>Audio</div></div>';
+        for(let i=1; i<=surah.ayah_count; i++){
+            const d = data.find(x=>x.ayah_number==i) || {concise_done:0,deeper_look_done:0,audio_done:0};
+            html += `<div class="grid grid-cols-4 gap-1 text-center items-center">
+                <span class="text-sm">${i}</span>
+                ${['concise','deeper_look','audio'].map(f=>
+                    `<button onclick="toggleTafseer(${surahId},${i},'${f}')" id="taf-${surahId}-${i}-${f}" class="py-1 rounded text-xs ${d[f+'_done']?'bg-green-500 text-white':'bg-gray-100 dark:bg-gray-700 hover:bg-green-200'}">${d[f+'_done']?'✓':'○'}</button>`
+                ).join('')}
+            </div>`;
+        }
+        grid.innerHTML = html;
+        loadTafseerGlobalStats();
+    });
+}
+function toggleTafseer(surahId, ayah, field) {
+    fetch('/deen/tafseer/toggle', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({surah_id:surahId, ayah_number:ayah, field:field})})
+    .then(r=>r.json()).then(d=>{
+        const btn = document.getElementById(`taf-${surahId}-${ayah}-${field}`);
+        if(d.value){btn.className='py-1 rounded text-xs bg-green-500 text-white'; btn.textContent='✓';}
+        else{btn.className='py-1 rounded text-xs bg-gray-100 dark:bg-gray-700 hover:bg-green-200'; btn.textContent='○';}
+        loadTafseer();
+    });
+}
+initCharts();
+document.querySelectorAll('.prayer-checkbox').forEach((el) => {
+    el.addEventListener('change', () => {
+        autosavePrayers();
+    });
+});
+loadJuzSurahs();
+loadMemStats();
+loadTafseer();
+loadTafseerGlobalStats();
+</script>
+{% endblock %}

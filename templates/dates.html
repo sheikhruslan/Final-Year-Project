@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Important Dates{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">💝 Important Dates</h1>
+        <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add Date</button>
+    </div>
+    <!-- Upcoming -->
+    {% if upcoming %}
+    <div class="space-y-2">
+        <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">Upcoming</h3>
+        {% for d in upcoming %}
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm flex items-center gap-3">
+            <div class="text-2xl">{% if d.event_type == 'birthday' %}🎂{% elif d.event_type == 'anniversary' %}💍{% else %}📌{% endif %}</div>
+            <div class="flex-1">
+                <div class="font-medium text-sm">{{ d.title }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ d.event_date }} · {{ d.event_type }}</div>
+                {% if d.notes %}<div class="text-xs text-gray-400 mt-0.5">{{ d.notes }}</div>{% endif %}
+            </div>
+            {% if d.is_recurring %}<span class="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">Yearly</span>{% endif %}
+            <form action="/dates/delete/{{ d.id }}" method="POST" onsubmit="return confirm('Delete?')">
+                <button class="text-gray-400 hover:text-red-500">🗑️</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% if past %}
+    <details>
+        <summary class="text-sm text-gray-500 dark:text-gray-400 cursor-pointer">Past Dates ({{ past|length }})</summary>
+        <div class="mt-2 space-y-2">
+            {% for d in past %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm flex items-center gap-3 opacity-60">
+                <div>{% if d.event_type == 'birthday' %}🎂{% elif d.event_type == 'anniversary' %}💍{% else %}📌{% endif %}</div>
+                <div class="flex-1 text-sm">{{ d.title }} <span class="text-xs text-gray-400">{{ d.event_date }}</span></div>
+                <form action="/dates/delete/{{ d.id }}" method="POST" onsubmit="return confirm('Delete?')">
+                    <button class="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+    {% if not upcoming and not past %}
+    <div class="text-center py-16 text-gray-400"><p class="text-4xl mb-3">💝</p><p>No dates saved yet</p></div>
+    {% endif %}
+</div>
+<!-- Add Modal -->
+<div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-bold mb-4">Add Important Date</h3>
+        <form action="/dates/add" method="POST" class="space-y-3">
+            <input type="text" name="title" required placeholder="Title" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <input type="date" name="event_date" required class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <select name="event_type" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="birthday">🎂 Birthday</option>
+                <option value="anniversary">💍 Anniversary</option>
+                <option value="other">📌 Other</option>
+            </select>
+            <textarea name="notes" placeholder="Description" rows="2" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_recurring" value="1"> Repeats yearly</label>
+            <div class="flex gap-2">
+                <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Save</button>
+                <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

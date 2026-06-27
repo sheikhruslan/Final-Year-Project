@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Life Tracker{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold">Today</h1>
+            <p id="date" class="text-gray-500 dark:text-gray-400 mt-1"></p>
+        </div>
+        <div id="clock" class="text-5xl md:text-6xl font-light tabular-nums text-gray-900 dark:text-white"></div>
+    </div>
+
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-gray-500">Habits</div>
+            <div class="text-2xl font-bold mt-1">{{ habits_done }}/{{ due_habits_count }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-gray-500">Water</div>
+            <div class="text-2xl font-bold mt-1">{{ water_done }}/{{ water_target }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-gray-500">Prayers</div>
+            <div class="text-2xl font-bold mt-1">{{ prayer_done }}/5</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-gray-500">Overdue Todos</div>
+            <div class="text-2xl font-bold mt-1">{{ overdue_todos }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
+            <div class="text-xs text-gray-500">Latest Sleep</div>
+            <div class="text-2xl font-bold mt-1">{{ '%.1f'|format(latest_sleep.total_hours) if latest_sleep and latest_sleep.total_hours else '-' }}</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold">Needs Attention</h2>
+            </div>
+            {% if actions %}
+            <div class="space-y-3">
+                {% for action in actions %}
+                <a href="{{ action.link }}" class="block rounded-xl border border-gray-100 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
+                    <div class="font-medium">{{ action.label }}</div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ action.hint }}</div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400">Nothing urgent right now. Use the quick add button if you want to log something fast.</p>
+            {% endif %}
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm space-y-4">
+            <div>
+                <h2 class="font-semibold mb-3">Fast Links</h2>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <a href="/todos" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Todos</a>
+                    <a href="/gym" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Gym</a>
+                    <a href="/sleep" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Sleep</a>
+                    <a href="/water" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Water</a>
+                    <a href="/journal" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Journal</a>
+                    <a href="/important-dates" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Dates</a>
+                </div>
+            </div>
+            <div>
+                <h2 class="font-semibold mb-3">Upcoming</h2>
+                {% if upcoming_dates %}
+                <div class="space-y-2 text-sm">
+                    {% for item in upcoming_dates %}
+                    <div class="rounded-lg border border-gray-100 dark:border-gray-700 px-3 py-2">
+                        <div class="font-medium">{{ item.title }}</div>
+                        <div class="text-gray-500 dark:text-gray-400">{{ item.event_date }} · {{ item.event_type }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">No important dates in the next 7 days.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
+        <h2 class="font-semibold mb-3">Pending Todos</h2>
+        {% if pending_todos %}
+        <div class="space-y-2">
+            {% for todo in pending_todos %}
+            <div class="flex items-center justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700/60 text-sm">
+                <div>
+                    <div class="font-medium">{{ todo.title }}</div>
+                    <div class="text-gray-500 dark:text-gray-400">{{ todo.due_date or 'No due date' }}{% if todo.priority %} · {{ todo.priority }}{% endif %}</div>
+                </div>
+                <a href="/todos" class="text-blue-600 dark:text-blue-400">Open</a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-500 dark:text-gray-400">No pending todos.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function updateClock(){
+    const now=new Date();
+    document.getElementById('clock').textContent=now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+    document.getElementById('date').textContent=now.toLocaleDateString('en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+updateClock();setInterval(updateClock,1000);
+</script>
+{% endblock %}
