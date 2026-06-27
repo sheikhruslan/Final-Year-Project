@@ -16,6 +16,32 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 _PRAYER_CACHE = {}
 
+GYM_PROGRESS_TABLES = [
+    'user_profile',
+    'workout_types',
+    'exercises',
+    'workout_stretches',
+    'workout_sessions',
+    'workout_exercise_logs',
+    'session_stretch_logs',
+    'exercise_strength_benchmarks',
+    'body_stats',
+    'daily_steps',
+]
+
+GYM_RESTORE_DELETE_ORDER = [
+    'session_stretch_logs',
+    'workout_exercise_logs',
+    'exercise_strength_benchmarks',
+    'workout_stretches',
+    'exercises',
+    'workout_sessions',
+    'workout_types',
+    'body_stats',
+    'daily_steps',
+    'user_profile',
+]
+
 init_db()
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -27,6 +53,45 @@ def get_settings():
     rows = conn.execute('SELECT setting_key, setting_value FROM app_settings').fetchall()
     conn.close()
     return {r['setting_key']: r['setting_value'] for r in rows}
+
+
+def table_exists(conn, table_name):
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return bool(row)
+
+
+def get_table_columns(conn, table_name):
+    return [row['name'] for row in conn.execute(f'PRAGMA table_info({table_name})').fetchall()]
+
+
+def dump_tables(conn, table_names):
+    payload = {}
+    for table in table_names:
+        if not table_exists(conn, table):
+            continue
+        payload[table] = [dict(row) for row in conn.execute(f'SELECT * FROM {table}').fetchall()]
+    return payload
+
+
+def restore_table_rows(conn, table_name, rows):
+    if not table_exists(conn, table_name):
+        return
+    valid_columns = get_table_columns(conn, table_name)
+    if not valid_columns:
+        return
+    for row in rows:
+        row_dict = dict(row)
+        insert_cols = [col for col in valid_columns if col in row_dict]
+        if not insert_cols:
+            continue
+        placeholders = ','.join(['?'] * len(insert_cols))
+        conn.execute(
+            f"INSERT INTO {table_name} ({','.join(insert_cols)}) VALUES ({placeholders})",
+            tuple(row_dict.get(col) for col in insert_cols),
+        )
 
 def setting_is_true(settings, key, default='false'):
     return str(settings.get(key, default)).lower() == 'true'
@@ -3551,6 +3616,56 @@ def export_all_data():
         payload[table] = [dict(r) for r in conn.execute(f'SELECT * FROM {table}').fetchall()]
     conn.close()
     return jsonify(payload)
+
+
+@app.route('/backup/gym-progress')
+def backup_gym_progress():
+    conn = get_db()
+    payload = dump_tables(conn, GYM_PROGRESS_TABLES)
+    conn.close()
+    return jsonify(payload)
+
+
+@app.route('/restore/gym-progress', methods=['POST'])
+def restore_gym_progress():
+    upload = request.files.get('gym_backup_file')
+    if not upload or not upload.filename:
+        flash('Please choose a Gym Progress JSON file first.', 'error')
+        return redirect(url_for('settings'))
+
+    try:
+        incoming = json.loads(upload.read().decode('utf-8'))
+    except Exception:
+        flash('Invalid JSON file. Please upload a valid Gym Progress backup.', 'error')
+        return redirect(url_for('settings'))
+
+    if not isinstance(incoming, dict):
+        flash('Invalid backup format. Expected a JSON object of table data.', 'error')
+        return redirect(url_for('settings'))
+
+    conn = get_db()
+    try:
+        conn.execute('PRAGMA foreign_keys = OFF')
+        for table in GYM_RESTORE_DELETE_ORDER:
+            if table_exists(conn, table):
+                conn.execute(f'DELETE FROM {table}')
+
+        for table in GYM_PROGRESS_TABLES:
+            rows = incoming.get(table, [])
+            if not isinstance(rows, list):
+                continue
+            restore_table_rows(conn, table, rows)
+
+        conn.commit()
+        flash('Gym progress restored successfully.', 'success')
+    except Exception:
+        conn.rollback()
+        flash('Could not restore gym progress from that file.', 'error')
+    finally:
+        conn.execute('PRAGMA foreign_keys = ON')
+        conn.close()
+
+    return redirect(url_for('settings'))
 
 @app.route('/backup/database')
 def backup_database():

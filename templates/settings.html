@@ -132,6 +132,18 @@
             {% endfor %}
         </div>
     </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm space-y-4">
+        <h3 class="font-medium">Gym Progress Restore</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Use this to restore only gym-related history (sessions, sets, body stats, steps, and benchmark lines) without importing the rest of your old data.</p>
+        <div class="flex flex-wrap gap-2">
+            <a href="/backup/gym-progress" class="bg-gray-100 dark:bg-gray-700 px-3 py-1.5 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600">Download Gym Progress Backup (JSON)</a>
+        </div>
+        <form action="/restore/gym-progress" method="POST" enctype="multipart/form-data" class="space-y-3">
+            <input type="file" name="gym_backup_file" accept="application/json,.json" required class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <button class="bg-blue-600 text-white px-5 py-2 rounded text-sm">Restore Gym Progress</button>
+        </form>
+    </div>
 </div>
 {% endblock %}
 {% block scripts %}
