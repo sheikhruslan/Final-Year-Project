@@ -47,8 +47,8 @@
                     {% endif %}
                     {% if t.due_time %}<span class="text-gray-400">{{ t.due_time }}</span>{% endif %}
                     {% if t.category %}<span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{{ t.category }}</span>{% endif %}
-                    <button type="button" onclick="openTodoModal({{ t.id|tojson }}, {{ t.title|tojson }}, {{ (t.description or '')|tojson }}, {{ t.priority|tojson }}, {{ (t.category or '')|tojson }}, {{ (t.due_date or '')|tojson }}, {{ (t.due_time or '')|tojson }}, {{ (t.parent_todo_id or '')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
-                    <button type="button" onclick="openTodoModal('', '', '', 'medium', {{ (t.category or '')|tojson }}, '', '', {{ t.id|tojson }})" class="text-indigo-600 dark:text-indigo-400">+ Subtask</button>
+                    <button type="button" onclick='openTodoModal({{ t.id|tojson }}, {{ t.title|tojson }}, {{ (t.description or "")|tojson }}, {{ t.priority|tojson }}, {{ (t.category or "")|tojson }}, {{ (t.due_date or "")|tojson }}, {{ (t.due_time or "")|tojson }}, {{ (t.parent_todo_id or "")|tojson }})' class="text-blue-600 dark:text-blue-400">Edit</button>
+                    <button type="button" onclick='openTodoModal("", "", "", "medium", {{ (t.category or "")|tojson }}, "", "", {{ t.id|tojson }})' class="text-indigo-600 dark:text-indigo-400">+ Subtask</button>
                     <form action="/todos/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete this task and its subtasks?')">
                         <button class="text-gray-400 hover:text-red-500">🗑️</button>
                     </form>
@@ -67,7 +67,7 @@
                         {% if sub.description %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ sub.description }}</div>{% endif %}
                     </div>
                     <div class="flex items-center gap-2 text-xs">
-                        <button type="button" onclick="openTodoModal({{ sub.id|tojson }}, {{ sub.title|tojson }}, {{ (sub.description or '')|tojson }}, {{ sub.priority|tojson }}, {{ (sub.category or '')|tojson }}, {{ (sub.due_date or '')|tojson }}, {{ (sub.due_time or '')|tojson }}, {{ (sub.parent_todo_id or '')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
+                        <button type="button" onclick='openTodoModal({{ sub.id|tojson }}, {{ sub.title|tojson }}, {{ (sub.description or "")|tojson }}, {{ sub.priority|tojson }}, {{ (sub.category or "")|tojson }}, {{ (sub.due_date or "")|tojson }}, {{ (sub.due_time or "")|tojson }}, {{ (sub.parent_todo_id or "")|tojson }})' class="text-blue-600 dark:text-blue-400">Edit</button>
                         <form action="/todos/delete/{{ sub.id }}" method="POST" onsubmit="return confirm('Delete subtask?')">
                             <button class="text-gray-400 hover:text-red-500">🗑️</button>
                         </form>
