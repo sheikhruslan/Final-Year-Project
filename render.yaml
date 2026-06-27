@@ -1,7 +1,7 @@
 services:
   - type: web
     name: life-tracker
-    runtime: python
+    env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
     envVars:
@@ -11,7 +11,7 @@ services:
         value: /var/data/uploads
       - key: SECRET_KEY
         generateValue: true
-    disks:
-      - name: life-tracker-data
-        mountPath: /var/data
-        sizeGB: 2
+    disk:
+      name: life-tracker-data
+      mountPath: /var/data
+      sizeGB: 2
