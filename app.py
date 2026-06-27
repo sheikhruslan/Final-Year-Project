@@ -9,10 +9,15 @@ from urllib.parse import urlencode
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
-app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', os.path.join(os.path.dirname(__file__), 'static', 'uploads'))
+default_upload_folder = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
+app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', default_upload_folder)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+try:
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+except (PermissionError, OSError):
+    app.config['UPLOAD_FOLDER'] = default_upload_folder
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 _PRAYER_CACHE = {}
 

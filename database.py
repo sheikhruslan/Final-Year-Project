@@ -5,16 +5,24 @@ import os
 
 BASE_DIR = os.path.dirname(__file__)
 DATABASE = os.getenv('DATABASE_PATH', os.path.join(BASE_DIR, 'lifetracker.db'))
+FALLBACK_DATABASE = os.path.join(BASE_DIR, 'lifetracker.db')
 
 
 def get_database_path():
     return DATABASE
 
 def get_db():
-    db_dir = os.path.dirname(DATABASE)
-    if db_dir:
-        os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(DATABASE)
+    chosen_path = DATABASE
+    db_dir = os.path.dirname(chosen_path)
+    try:
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        conn = sqlite3.connect(chosen_path)
+    except (PermissionError, OSError, sqlite3.OperationalError):
+        fallback_dir = os.path.dirname(FALLBACK_DATABASE)
+        if fallback_dir:
+            os.makedirs(fallback_dir, exist_ok=True)
+        conn = sqlite3.connect(FALLBACK_DATABASE)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
