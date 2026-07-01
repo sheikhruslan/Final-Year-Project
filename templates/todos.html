@@ -4,7 +4,7 @@
 {% macro todo_row(task, depth=0) %}
     {% set has_children = task.children and task.children|length > 0 %}
     {% if has_children %}
-    <details class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-l-4 {% if task.priority == 'high' %}border-red-500{% elif task.priority == 'medium' %}border-yellow-500{% else %}border-green-500{% endif %}" {% if depth == 0 %}open{% endif %}>
+    <details class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-l-4 {% if task.priority == 'high' %}border-red-500{% elif task.priority == 'medium' %}border-yellow-500{% else %}border-green-500{% endif %}">
         <summary class="list-none cursor-pointer p-4" style="margin-left: {{ depth * 14 }}px;">
             <div class="flex items-center gap-3">
                 <form action="/todos/complete/{{ task.id }}" method="POST" onclick="event.stopPropagation()">

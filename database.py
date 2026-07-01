@@ -99,6 +99,9 @@ def init_db():
         name TEXT NOT NULL UNIQUE, description TEXT,
         is_cardio INTEGER DEFAULT 0
     )''')
+    workout_type_columns = {row[1] for row in c.execute('PRAGMA table_info(workout_types)').fetchall()}
+    if 'is_active' not in workout_type_columns:
+        c.execute('ALTER TABLE workout_types ADD COLUMN is_active INTEGER DEFAULT 1')
     c.executemany('INSERT OR IGNORE INTO workout_types (name,description,is_cardio) VALUES (?,?,?)', [
         ('Push','Chest, Shoulders, Triceps',0),('Pull','Back, Biceps',0),
         ('Legs','Quads, Hamstrings, Glutes',0),('Endurance Cardio','Treadmill intervals',1),
@@ -116,6 +119,9 @@ def init_db():
         is_active INTEGER DEFAULT 1,
         FOREIGN KEY (workout_type_id) REFERENCES workout_types(id)
     )''')
+    exercise_columns = {row[1] for row in c.execute('PRAGMA table_info(exercises)').fetchall()}
+    if 'template_sets' not in exercise_columns:
+        c.execute('ALTER TABLE exercises ADD COLUMN template_sets INTEGER DEFAULT 3')
 
     c.execute('''CREATE TABLE IF NOT EXISTS workout_stretches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,6 +243,59 @@ def init_db():
     if 'parent_todo_id' not in todo_columns:
         c.execute('ALTER TABLE todos ADD COLUMN parent_todo_id INTEGER')
     c.execute('CREATE INDEX IF NOT EXISTS idx_todos_parent_todo_id ON todos(parent_todo_id)')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS chess_matches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        match_date DATE NOT NULL,
+        result TEXT CHECK(result IN ('win','loss','draw')) NOT NULL,
+        elo_change INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS chess_daily_checklist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        log_date DATE NOT NULL UNIQUE,
+        tactical_warmup_done INTEGER DEFAULT 0,
+        engine_review_done INTEGER DEFAULT 0,
+        lesson_done INTEGER DEFAULT 0,
+        rapid_games_done INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS chess_curriculum (
+        day_number INTEGER PRIMARY KEY,
+        phase TEXT NOT NULL,
+        title TEXT NOT NULL,
+        is_completed INTEGER DEFAULT 0,
+        completed_date DATE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS chess_lessons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lesson_date DATE NOT NULL,
+        topic TEXT NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    chess_curriculum_seed = [
+        (1, 'Phase 1: Mechanics & Vision', 'Board Setup & Stalemate Basics + Coordinates Vision Training'),
+        (2, 'Phase 1: Mechanics & Vision', 'Special Rules (Castling & En Passant Rights)'),
+        (3, 'Phase 1: Mechanics & Vision', 'Danger Rules (Protection & Combat)'),
+        (4, 'Phase 1: Mechanics & Vision', 'Forcing Moves (Check in One & Out of Check)'),
+        (5, 'Phase 1: Mechanics & Vision', 'Finishing the Game (Mate in One - 30 Exercises)'),
+        (6, 'Phase 1: Mechanics & Vision', 'Overwhelming Advantage (Piece Checkmates I: Two Rooks & Queen Mate)'),
+        (7, 'Phase 1: Mechanics & Vision', 'Endgame Execution (Piece Checkmates I: Solo Rook Mate)'),
+        (8, 'Phase 2: Tactical Weaponry', 'Fundamental Tactics - The Fork'),
+        (9, 'Phase 2: Tactical Weaponry', 'Fundamental Tactics - The Pin'),
+        (10, 'Phase 2: Tactical Weaponry', 'Fundamental Tactics - The Skewer'),
+        (11, 'Phase 2: Tactical Weaponry', 'Fundamental Tactics - Discovered Attacks'),
+        (12, 'Phase 2: Tactical Weaponry', 'Advanced Combinations (Double Check & Overloaded Pieces)'),
+        (13, 'Phase 2: Tactical Weaponry', 'Mating Networks (Checkmate Patterns I & II)'),
+        (14, 'Phase 2: Tactical Weaponry', 'Advanced Patterns (Checkmate Patterns III & IV)'),
+        (15, 'Phase 2: Tactical Weaponry', 'Introduction to Endgame Strategy (Pawn Endgames: Key Squares & Opposition)'),
+    ]
+    c.executemany('INSERT OR IGNORE INTO chess_curriculum (day_number, phase, title) VALUES (?,?,?)', chess_curriculum_seed)
 
     c.execute('''CREATE TABLE IF NOT EXISTS routines (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

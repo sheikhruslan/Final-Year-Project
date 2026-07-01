@@ -258,31 +258,28 @@ function getFilteredTransactions() {
         const dt = parseTxDate(t.transaction_date);
         return dt >= range.start && dt <= range.end;
     });
+    const prior = financeTransactions.filter(t => parseTxDate(t.transaction_date) < range.start);
 
     const meta = document.getElementById('financePeriodMeta');
     meta.textContent = `Showing: ${formatDateLabel(range.start)} to ${formatDateLabel(range.end)}`;
-    return { filtered, range };
+    return { filtered, range, prior };
 }
 
-function buildLineSeries(transactions, range) {
-    const byDayNet = {};
-    transactions.forEach(t => {
-        const day = t.transaction_date;
-        const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
-        byDayNet[day] = (byDayNet[day] || 0) + delta;
-    });
-
-    const labels = [];
+function buildLineSeries(transactions, priorTransactions) {
+    const labels = ['Start'];
     const values = [];
-    let running = 0;
-    const cursor = new Date(range.start);
-    while (cursor <= range.end) {
-        const day = formatDateLabel(cursor);
-        labels.push(day.slice(5));
-        running += byDayNet[day] || 0;
+    let running = priorTransactions.reduce((sum, t) => {
+        const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
+        return sum + delta;
+    }, 0);
+    values.push(Number(running.toFixed(2)));
+
+    transactions.forEach((t, idx) => {
+        const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
+        running += delta;
+        labels.push(`${t.transaction_date.slice(5)} #${idx + 1}`);
         values.push(Number(running.toFixed(2)));
-        cursor.setDate(cursor.getDate() + 1);
-    }
+    });
     return { labels, values };
 }
 
@@ -300,11 +297,11 @@ function buildExpenseBreakdown(transactions) {
 }
 
 function renderFinanceCharts() {
-    const { filtered, range } = getFilteredTransactions();
+    const { filtered, prior } = getFilteredTransactions();
     const noData = document.getElementById('financeNoData');
     noData.classList.toggle('hidden', filtered.length > 0);
 
-    const line = buildLineSeries(filtered, range);
+    const line = buildLineSeries(filtered, prior);
     const pie = buildExpenseBreakdown(filtered);
 
     const lineEl = document.getElementById('moneyLineChart');

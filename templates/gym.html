@@ -65,6 +65,7 @@
             <div class="flex gap-2 flex-wrap">
                 <a href="/gym/session/new/{{ wt.id }}" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-center py-2 rounded text-xs font-medium">Start Session</a>
                 <button onclick="manageWorkoutSettings({{ wt.id }}, '{{ wt.name }}')" class="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600">⚙️</button>
+                <button onclick="deleteWorkoutType({{ wt.id }}, '{{ wt.name }}')" class="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-3 py-2 rounded text-xs hover:bg-red-200 dark:hover:bg-red-900/50">Delete</button>
             </div>
         </div>
         {% endfor %}
@@ -155,6 +156,14 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <h3 id="modalTitle" class="text-lg font-bold mb-4">Workout Settings</h3>
         <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Archiving an exercise or stretch removes it from future workout forms, but keeps all past workout data and progress history.</p>
+        <div class="mb-5 rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+            <h4 class="text-sm font-semibold">Template Sets</h4>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Set the default total sets for all active exercises in this workout type. (Warmup + working sets)</p>
+            <div class="flex gap-2">
+                <input id="workoutTemplateSetsInput" type="number" min="2" max="8" value="3" class="w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <button type="button" onclick="saveWorkoutTemplateSets()" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-2 text-sm">Save</button>
+            </div>
+        </div>
         <form onsubmit="addExercise(event)" class="mb-5 rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-3">
             <h4 class="text-sm font-semibold">Add Exercise</h4>
             <input id="newExerciseName" type="text" required placeholder="Exercise name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
@@ -215,10 +224,14 @@ function loadWorkoutSettings() {
         const archivedExercisesList = document.getElementById('archivedExercisesList');
         const stretchesList = document.getElementById('stretchesList');
         const archivedStretchesList = document.getElementById('archivedStretchesList');
+        const templateSetsInput = document.getElementById('workoutTemplateSetsInput');
+        const defaultTemplateSets = exerciseData.exercises.length ? (exerciseData.exercises[0].template_sets || 3) : 3;
+        templateSetsInput.value = defaultTemplateSets;
         exerciseList.innerHTML = exerciseData.exercises.length ? exerciseData.exercises.map(e =>
             `<div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-900 rounded text-sm">
-                <span>${e.name} <span class="text-xs text-gray-400">(${e.muscle_group || 'Uncategorized'})</span></span>
+                <span>${e.name} <span class="text-xs text-gray-400">(${e.muscle_group || 'Uncategorized'}) · ${e.template_sets || 3} sets</span></span>
                 <div class="flex items-center gap-2">
+                    <input type="number" min="2" max="8" value="${e.template_sets || 3}" class="w-14 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-1" onchange="updateExerciseTemplateSets(${e.id}, this.value)">
                     <button onclick="moveExercise(${e.id}, 'up')" class="text-gray-500 hover:text-gray-700 text-xs">Up</button>
                     <button onclick="moveExercise(${e.id}, 'down')" class="text-gray-500 hover:text-gray-700 text-xs">Down</button>
                     <button onclick="deleteExercise(${e.id})" class="text-amber-600 hover:text-amber-700 text-xs">Archive</button>
@@ -249,6 +262,23 @@ function loadWorkoutSettings() {
 
         document.getElementById('exercisesModal').classList.remove('hidden');
     });
+}
+
+function saveWorkoutTemplateSets() {
+    const value = Number(document.getElementById('workoutTemplateSetsInput').value || 3);
+    fetch('/gym/workout-type/template-sets/' + currentWorkoutTypeId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ template_sets: value })
+    }).then(() => loadWorkoutSettings());
+}
+
+function updateExerciseTemplateSets(eid, value) {
+    fetch('/gym/exercise/template-sets/' + eid, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ template_sets: Number(value || 3) })
+    }).then(() => loadWorkoutSettings());
 }
 
 function addExercise(event) {
@@ -294,6 +324,19 @@ function deleteStretch(sid) {
 }
 function restoreStretch(sid) {
     fetch('/gym/stretch/restore/'+sid, {method:'POST'}).then(()=>loadWorkoutSettings());
+}
+
+function deleteWorkoutType(wtId, name) {
+    if (!confirm(`Delete workout type "${name}" from active list? Past sessions stay in history.`)) return;
+    fetch('/gym/workout-type/delete/' + wtId, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.error || 'Could not delete workout type.');
+                return;
+            }
+            window.location.reload();
+        });
 }
 </script>
 {% endblock %}

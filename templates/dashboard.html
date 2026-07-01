@@ -1,74 +1,121 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Life Tracker{% endblock %}
 {% block content %}
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+    .dash-title { font-family: 'Space Grotesk', sans-serif; }
+    .hero-bg {
+        background:
+            radial-gradient(1100px 340px at 4% 0%, rgba(37, 99, 235, 0.24), transparent 60%),
+            radial-gradient(760px 280px at 90% 40%, rgba(234, 88, 12, 0.18), transparent 60%),
+            linear-gradient(135deg, #0f172a, #1e293b 58%, #0b1324);
+    }
+    .status-ring {
+        background: conic-gradient(var(--ring-color) var(--ring-progress), rgba(255,255,255,0.1) 0);
+    }
+    .float-in { animation: floatIn .55s ease both; }
+    .float-in.delay-1 { animation-delay: .08s; }
+    .float-in.delay-2 { animation-delay: .16s; }
+    .float-in.delay-3 { animation-delay: .24s; }
+    @keyframes floatIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
 <div class="space-y-6">
-    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-        <div>
-            <h1 class="text-3xl font-bold">Today</h1>
-            <p id="date" class="text-gray-500 dark:text-gray-400 mt-1"></p>
+    <section class="hero-bg rounded-3xl p-6 md:p-8 text-white shadow-xl float-in">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+            <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-blue-100/80 mb-2">Mission Control</p>
+                <h1 class="dash-title text-4xl md:text-5xl font-bold leading-tight">Build Today Intentionally</h1>
+                <p id="date" class="mt-3 text-blue-100/90"></p>
+            </div>
+            <div class="text-right">
+                <div class="text-xs uppercase tracking-widest text-blue-100/80">Local Time</div>
+                <div id="clock" class="dash-title text-5xl md:text-6xl font-bold tabular-nums mt-1"></div>
+            </div>
         </div>
-        <div id="clock" class="text-5xl md:text-6xl font-light tabular-nums text-gray-900 dark:text-white"></div>
-    </div>
+    </section>
 
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
-            <div class="text-xs text-gray-500">Habits</div>
-            <div class="text-2xl font-bold mt-1">{{ habits_done }}/{{ due_habits_count }}</div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
-            <div class="text-xs text-gray-500">Water</div>
-            <div class="text-2xl font-bold mt-1">{{ water_done }}/{{ water_target }}</div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
-            <div class="text-xs text-gray-500">Prayers</div>
-            <div class="text-2xl font-bold mt-1">{{ prayer_done }}/5</div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
-            <div class="text-xs text-gray-500">Overdue Todos</div>
-            <div class="text-2xl font-bold mt-1">{{ overdue_todos }}</div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm">
-            <div class="text-xs text-gray-500">Latest Sleep</div>
-            <div class="text-2xl font-bold mt-1">{{ '%.1f'|format(latest_sleep.total_hours) if latest_sleep and latest_sleep.total_hours else '-' }}</div>
-        </div>
-    </div>
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <article class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm float-in delay-1">
+            <div class="flex items-center gap-4">
+                <div class="status-ring w-14 h-14 rounded-full p-[5px]" style="--ring-color:#16a34a; --ring-progress: {{ ((habits_done / due_habits_count) * 360) | round(0) if due_habits_count else 0 }}deg;">
+                    <div class="w-full h-full rounded-full bg-white dark:bg-gray-800"></div>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Habits</p>
+                    <p class="text-xl font-bold">{{ habits_done }}/{{ due_habits_count }}</p>
+                </div>
+            </div>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm float-in delay-1">
+            <div class="flex items-center gap-4">
+                <div class="status-ring w-14 h-14 rounded-full p-[5px]" style="--ring-color:#0284c7; --ring-progress: {{ ((water_done / water_target) * 360) | round(0) if water_target else 0 }}deg;">
+                    <div class="w-full h-full rounded-full bg-white dark:bg-gray-800"></div>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Hydration</p>
+                    <p class="text-xl font-bold">{{ water_done }}/{{ water_target }} ml</p>
+                </div>
+            </div>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm float-in delay-2">
+            <div class="flex items-center gap-4">
+                <div class="status-ring w-14 h-14 rounded-full p-[5px]" style="--ring-color:#9333ea; --ring-progress: {{ ((prayer_done / 5) * 360) | round(0) }}deg;">
+                    <div class="w-full h-full rounded-full bg-white dark:bg-gray-800"></div>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Prayers</p>
+                    <p class="text-xl font-bold">{{ prayer_done }}/5</p>
+                </div>
+            </div>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm float-in delay-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Sleep + Risk</p>
+            <p class="text-xl font-bold mt-1">{{ '%.1f'|format(latest_sleep.total_hours) if latest_sleep and latest_sleep.total_hours else '-' }}h</p>
+            <p class="text-xs mt-2 {% if overdue_todos > 0 %}text-red-500{% else %}text-emerald-500{% endif %}">
+                {% if overdue_todos > 0 %}{{ overdue_todos }} overdue todos{% else %}No overdue todos{% endif %}
+            </p>
+        </article>
+    </section>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm float-in delay-2">
             <div class="flex items-center justify-between mb-4">
-                <h2 class="font-semibold">Needs Attention</h2>
+                <h2 class="dash-title text-xl font-bold">Priority Pulse</h2>
+                <a href="/todos" class="text-sm text-blue-600 dark:text-blue-400">Open todos</a>
             </div>
             {% if actions %}
             <div class="space-y-3">
                 {% for action in actions %}
-                <a href="{{ action.link }}" class="block rounded-xl border border-gray-100 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
-                    <div class="font-medium">{{ action.label }}</div>
+                <a href="{{ action.link }}" class="block rounded-2xl border border-gray-100 dark:border-gray-700 p-4 hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
+                    <div class="font-semibold">{{ action.label }}</div>
                     <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ action.hint }}</div>
                 </a>
                 {% endfor %}
             </div>
             {% else %}
-            <p class="text-sm text-gray-500 dark:text-gray-400">Nothing urgent right now. Use the quick add button if you want to log something fast.</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">No urgent blockers right now.</p>
             {% endif %}
         </div>
-        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm space-y-4">
+
+        <aside class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm space-y-4 float-in delay-3">
             <div>
-                <h2 class="font-semibold mb-3">Fast Links</h2>
+                <h2 class="dash-title text-lg font-bold mb-3">Launch Pads</h2>
                 <div class="grid grid-cols-2 gap-2 text-sm">
-                    <a href="/todos" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Todos</a>
-                    <a href="/gym" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Gym</a>
-                    <a href="/sleep" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Sleep</a>
-                    <a href="/water" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Water</a>
-                    <a href="/journal" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Journal</a>
-                    <a href="/important-dates" class="rounded-lg bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Dates</a>
+                    <a href="/journal" class="rounded-xl bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Journal</a>
+                    <a href="/gym" class="rounded-xl bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Gym</a>
+                    <a href="/financial" class="rounded-xl bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Finance</a>
+                    <a href="/focus" class="rounded-xl bg-gray-100 dark:bg-gray-700 px-3 py-2 text-center">Focus</a>
                 </div>
             </div>
             <div>
-                <h2 class="font-semibold mb-3">Upcoming</h2>
+                <h2 class="dash-title text-lg font-bold mb-3">Upcoming Dates</h2>
                 {% if upcoming_dates %}
                 <div class="space-y-2 text-sm">
                     {% for item in upcoming_dates %}
-                    <div class="rounded-lg border border-gray-100 dark:border-gray-700 px-3 py-2">
+                    <div class="rounded-xl border border-gray-100 dark:border-gray-700 px-3 py-2">
                         <div class="font-medium">{{ item.title }}</div>
                         <div class="text-gray-500 dark:text-gray-400">{{ item.event_date }} · {{ item.event_type }}</div>
                     </div>
@@ -78,11 +125,14 @@
                 <p class="text-sm text-gray-500 dark:text-gray-400">No important dates in the next 7 days.</p>
                 {% endif %}
             </div>
-        </div>
-    </div>
+        </aside>
+    </section>
 
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm">
-        <h2 class="font-semibold mb-3">Pending Todos</h2>
+    <section class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm float-in delay-3">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="dash-title text-xl font-bold">Pending Todos</h2>
+            <a href="/todos" class="text-sm text-blue-600 dark:text-blue-400">Manage all</a>
+        </div>
         {% if pending_todos %}
         <div class="space-y-2">
             {% for todo in pending_todos %}
@@ -98,7 +148,7 @@
         {% else %}
         <p class="text-sm text-gray-500 dark:text-gray-400">No pending todos.</p>
         {% endif %}
-    </div>
+    </section>
 </div>
 {% endblock %}
 {% block scripts %}

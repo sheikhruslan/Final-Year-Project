@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Chess{% endblock %}
+{% block content %}
+<style>
+    .chess-hero {
+        background:
+            radial-gradient(980px 260px at 0% 0%, rgba(22, 163, 74, 0.2), transparent 55%),
+            radial-gradient(780px 260px at 100% 60%, rgba(30, 64, 175, 0.24), transparent 62%),
+            linear-gradient(130deg, #111827, #1f2937 58%, #0f172a);
+    }
+    .chess-card { animation: chessRise .45s ease both; }
+    .chess-card.delay-1 { animation-delay: .06s; }
+    .chess-card.delay-2 { animation-delay: .12s; }
+    .chess-card.delay-3 { animation-delay: .18s; }
+    .milestone-glow {
+        animation: pulseGlow 1.2s ease-in-out infinite;
+    }
+    @keyframes chessRise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.45); }
+        50% { box-shadow: 0 0 0 9px rgba(22, 163, 74, 0); }
+    }
+</style>
+<div class="space-y-6">
+    <section class="chess-hero rounded-3xl p-6 text-white chess-card">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/90">Chess Growth System</p>
+                <h1 class="text-3xl md:text-4xl font-bold mt-2">15-Day Progression Engine</h1>
+                <p class="text-emerald-100/90 mt-2 text-sm">Tactics, game logging, ELO trend, and daily accountability in one place.</p>
+            </div>
+            <form action="/chess/settings/save" method="POST" class="bg-white/10 rounded-xl p-3 w-full md:w-auto">
+                <label class="text-xs text-emerald-100/80">Base ELO</label>
+                <div class="flex gap-2 mt-1">
+                    <input type="number" name="chess_base_elo" value="{{ base_elo }}" class="w-28 rounded bg-white/90 text-gray-900 p-2 text-sm border-0">
+                    <button class="px-3 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-sm">Save</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <article class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm chess-card delay-1">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Current ELO</p>
+            <p class="text-2xl font-bold mt-1">{{ current_elo }}</p>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm chess-card delay-1">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Wins</p>
+            <p class="text-2xl font-bold mt-1 text-emerald-600">{{ win_count }}</p>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm chess-card delay-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Losses</p>
+            <p class="text-2xl font-bold mt-1 text-red-600">{{ loss_count }}</p>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm chess-card delay-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Draws</p>
+            <p class="text-2xl font-bold mt-1 text-amber-500">{{ draw_count }}</p>
+        </article>
+        <article class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm chess-card delay-3">
+            <p class="text-xs text-gray-500 dark:text-gray-400">Win Streak</p>
+            <p class="text-2xl font-bold mt-1">{{ win_streak }}</p>
+        </article>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm chess-card delay-2">
+            <h2 class="font-semibold mb-3">ELO Trend</h2>
+            <canvas id="eloChart" height="170"></canvas>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm chess-card delay-3">
+            <h2 class="font-semibold">Daily Checklist</h2>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ checklist.log_date }}</p>
+            <form action="/chess/checklist/save" method="POST" class="space-y-2 mt-3">
+                <input type="hidden" name="log_date" value="{{ checklist.log_date }}">
+                {% for key, label in checklist_keys %}
+                <label class="flex items-center justify-between rounded-lg border border-gray-100 dark:border-gray-700 px-3 py-2 text-sm">
+                    <span>{{ label }}</span>
+                    <input type="checkbox" name="{{ key }}" value="1" {% if checklist[key] %}checked{% endif %}>
+                </label>
+                {% endfor %}
+                <button class="w-full bg-blue-600 hover:bg-blue-700 text-white rounded py-2 text-sm">Save Checklist</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm chess-card delay-2">
+            <h2 class="font-semibold mb-3">Game Logger</h2>
+            <form action="/chess/match/add" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-2 text-sm mb-4">
+                <input type="date" name="match_date" value="{{ today }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <select name="result" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <option value="win">Win</option>
+                    <option value="loss">Loss</option>
+                    <option value="draw">Draw</option>
+                </select>
+                <input type="number" name="elo_change" required placeholder="ELO Δ" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="bg-emerald-600 hover:bg-emerald-700 text-white rounded p-2">Log</button>
+            </form>
+            <div class="space-y-2 max-h-56 overflow-y-auto">
+                {% for game in recent_matches %}
+                <div class="flex items-center justify-between rounded-lg border border-gray-100 dark:border-gray-700 px-3 py-2 text-sm">
+                    <span>{{ game.match_date }} · {{ game.result|title }}</span>
+                    <span class="font-medium {% if game.elo_change >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">{{ '+' if game.elo_change >= 0 else '' }}{{ game.elo_change }}</span>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">No games logged yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm chess-card delay-3">
+            <h2 class="font-semibold mb-3">Lesson Logger</h2>
+            <form action="/chess/lesson/add" method="POST" class="space-y-2 text-sm mb-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input type="date" name="lesson_date" value="{{ today }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <input type="text" name="topic" required placeholder="Lesson topic" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                </div>
+                <textarea name="notes" rows="2" placeholder="Main takeaways" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"></textarea>
+                <button class="w-full bg-blue-600 hover:bg-blue-700 text-white rounded py-2">Save Lesson</button>
+            </form>
+            <div class="space-y-2 max-h-56 overflow-y-auto">
+                {% for lesson in lessons %}
+                <div class="rounded-lg border border-gray-100 dark:border-gray-700 px-3 py-2 text-sm">
+                    <div class="font-medium">{{ lesson.topic }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ lesson.lesson_date }}</div>
+                    {% if lesson.notes %}<div class="text-xs mt-1 text-gray-600 dark:text-gray-300">{{ lesson.notes }}</div>{% endif %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">No lessons logged yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm chess-card delay-3">
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <div>
+                <h2 class="font-semibold">15-Day Curriculum Roadmap</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Phase 1 focuses mechanics and vision, then Phase 2 builds tactical weaponry.</p>
+            </div>
+            <div class="text-right">
+                <div class="text-sm font-semibold">{{ completed_days }}/{{ total_days }} Complete</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ completion_pct }}%</div>
+            </div>
+        </div>
+
+        <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 mb-4 overflow-hidden">
+            <div id="curriculumProgressBar" class="h-full bg-emerald-500" style="width: {{ completion_pct }}%"></div>
+        </div>
+
+        <div id="milestoneBadge" class="hidden mb-4 rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 p-3 text-sm milestone-glow">
+            Milestone reached. Keep momentum.
+        </div>
+
+        <div class="space-y-2">
+            {% for day in curriculum %}
+            <form action="/chess/curriculum/toggle/{{ day.day_number }}" method="POST" class="flex items-center justify-between gap-3 border border-gray-100 dark:border-gray-700 rounded-lg px-3 py-2 text-sm {% if day.is_completed %}bg-emerald-50/80 dark:bg-emerald-900/20{% endif %}">
+                <div>
+                    <div class="font-medium">Day {{ day.day_number }}: {{ day.title }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ day.phase }}{% if day.completed_date %} · Completed {{ day.completed_date }}{% endif %}</div>
+                </div>
+                <button class="px-3 py-1 rounded text-xs {% if day.is_completed %}bg-emerald-600 text-white{% else %}bg-gray-200 dark:bg-gray-700{% endif %}">
+                    {% if day.is_completed %}Done{% else %}Mark Done{% endif %}
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const eloSeries = {{ elo_chart|tojson }};
+const labels = ['Start', ...eloSeries.map(p => p.date)];
+const data = [{{ base_elo }}, ...eloSeries.map(p => p.elo)];
+
+if (document.getElementById('eloChart')) {
+    new Chart(document.getElementById('eloChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'ELO',
+                data,
+                borderColor: '#10b981',
+                backgroundColor: '#10b98122',
+                borderWidth: 2,
+                pointRadius: 2,
+                tension: 0.25,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+}
+
+(function showMilestoneBadge() {
+    const pct = Number({{ completion_pct }});
+    const badge = document.getElementById('milestoneBadge');
+    if (!badge) return;
+    if (pct >= 25 && pct < 50) {
+        badge.textContent = 'Milestone reached: 25% complete.';
+        badge.classList.remove('hidden');
+    } else if (pct >= 50 && pct < 75) {
+        badge.textContent = 'Milestone reached: halfway through.';
+        badge.classList.remove('hidden');
+    } else if (pct >= 75 && pct < 100) {
+        badge.textContent = 'Milestone reached: final sprint.';
+        badge.classList.remove('hidden');
+    } else if (pct >= 100) {
+        badge.textContent = '15-day curriculum completed. Outstanding.';
+        badge.classList.remove('hidden');
+    }
+})();
+</script>
+{% endblock %}

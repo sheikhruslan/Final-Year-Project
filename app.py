@@ -47,6 +47,31 @@ GYM_RESTORE_DELETE_ORDER = [
     'user_profile',
 ]
 
+GYM_SYNC_TABLES = [
+    'body_stats',
+    'daily_steps',
+]
+
+GYM_SYNC_SETTING_KEYS = [
+    'body_measurements_date',
+    'diet_body_fat_pct',
+    'measurement_chest_cm',
+    'measurement_shoulders_cm',
+    'measurement_relaxed_arm_cm',
+    'measurement_flexed_arm_cm',
+    'measurement_forearm_cm',
+    'measurement_waist_cm',
+    'measurement_thigh_cm',
+    'measurement_calf_cm',
+]
+
+CHESS_DAILY_CHECKLIST_KEYS = [
+    ('tactical_warmup_done', 'Tactical warmup complete'),
+    ('engine_review_done', 'Engine review complete'),
+    ('lesson_done', 'Lesson complete'),
+    ('rapid_games_done', 'Rapid games complete'),
+]
+
 init_db()
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -1575,7 +1600,7 @@ def gym():
     if history_days not in (14, 30, 90, 180):
         history_days = 30
     cutoff_date = (date.today() - timedelta(days=history_days - 1)).isoformat()
-    wt = conn.execute('SELECT * FROM workout_types').fetchall()
+    wt = conn.execute('SELECT * FROM workout_types WHERE COALESCE(is_active, 1)=1 ORDER BY id').fetchall()
     recent = conn.execute('SELECT ws.*, wt.name as workout_name, wt.is_cardio FROM workout_sessions ws JOIN workout_types wt ON ws.workout_type_id=wt.id WHERE ws.session_date >= ? ORDER BY ws.session_date DESC LIMIT 50', (cutoff_date,)).fetchall()
     profile = conn.execute('SELECT * FROM user_profile WHERE id=1').fetchone()
     recent = [hydrate_cardio_session_metrics(conn, row, profile=profile, persist=True) for row in recent]
@@ -1686,6 +1711,9 @@ def gym_session_delete(session_id):
 def gym_exercises(wt_id):
     conn = get_db()
     wt = conn.execute('SELECT * FROM workout_types WHERE id=?', (wt_id,)).fetchone()
+    if not wt:
+        conn.close()
+        return jsonify({'error': 'Workout type not found'}), 404
     exercises = conn.execute('SELECT * FROM exercises WHERE workout_type_id=? AND is_active=1 ORDER BY order_index, id', (wt_id,)).fetchall()
     archived_exercises = conn.execute('SELECT * FROM exercises WHERE workout_type_id=? AND is_active=0 ORDER BY order_index, id, name', (wt_id,)).fetchall()
     conn.close()
@@ -1694,6 +1722,66 @@ def gym_exercises(wt_id):
         'exercises': [dict(e) for e in exercises],
         'archived_exercises': [dict(e) for e in archived_exercises]
     })
+
+@app.route('/gym/workout-type/delete/<int:wt_id>', methods=['POST'])
+def gym_workout_type_delete(wt_id):
+    conn = get_db()
+    row = conn.execute('SELECT id, name FROM workout_types WHERE id=?', (wt_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Workout type not found'}), 404
+
+    active_count = conn.execute('SELECT COUNT(*) as c FROM workout_types WHERE COALESCE(is_active, 1)=1').fetchone()['c']
+    if active_count <= 1:
+        conn.close()
+        return jsonify({'success': False, 'error': 'At least one workout type must remain active'}), 400
+
+    conn.execute('UPDATE workout_types SET is_active=0 WHERE id=?', (wt_id,))
+    conn.execute('UPDATE exercises SET is_active=0 WHERE workout_type_id=?', (wt_id,))
+    conn.execute('UPDATE workout_stretches SET is_active=0 WHERE workout_type_id=?', (wt_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/gym/exercise/template-sets/<int:eid>', methods=['POST'])
+def gym_exercise_template_sets(eid):
+    payload = request.get_json(silent=True) or {}
+    template_sets = payload.get('template_sets')
+    try:
+        template_sets = int(template_sets)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Invalid template set count'}), 400
+    template_sets = max(2, min(template_sets, 8))
+
+    conn = get_db()
+    row = conn.execute('SELECT id FROM exercises WHERE id=?', (eid,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Exercise not found'}), 404
+    conn.execute('UPDATE exercises SET template_sets=? WHERE id=?', (template_sets, eid))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'template_sets': template_sets})
+
+@app.route('/gym/workout-type/template-sets/<int:wt_id>', methods=['POST'])
+def gym_workout_type_template_sets(wt_id):
+    payload = request.get_json(silent=True) or {}
+    template_sets = payload.get('template_sets')
+    try:
+        template_sets = int(template_sets)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Invalid template set count'}), 400
+    template_sets = max(2, min(template_sets, 8))
+
+    conn = get_db()
+    row = conn.execute('SELECT id FROM workout_types WHERE id=?', (wt_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Workout type not found'}), 404
+    conn.execute('UPDATE exercises SET template_sets=? WHERE workout_type_id=? AND is_active=1', (template_sets, wt_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'template_sets': template_sets})
 
 @app.route('/gym/stretches/<int:wt_id>')
 def gym_stretches(wt_id):
@@ -1808,7 +1896,11 @@ def gym_stretch_restore(sid):
 @app.route('/gym/session/new/<int:wt_id>')
 def gym_session_new(wt_id):
     conn = get_db()
-    wt = conn.execute('SELECT * FROM workout_types WHERE id=?', (wt_id,)).fetchone()
+    wt = conn.execute('SELECT * FROM workout_types WHERE id=? AND COALESCE(is_active, 1)=1', (wt_id,)).fetchone()
+    if not wt:
+        conn.close()
+        flash('Workout type not found.', 'error')
+        return redirect(url_for('gym'))
     exercises = conn.execute('SELECT * FROM exercises WHERE workout_type_id=? AND is_active=1 ORDER BY order_index', (wt_id,)).fetchall()
     if wt and wt['is_cardio'] and not exercises:
         conn.execute('INSERT INTO exercises (name,workout_type_id,is_cardio,order_index,is_active) VALUES (?,?,?,?,1)',
@@ -3596,6 +3688,172 @@ def reviews_save():
     flash('Review saved!', 'success')
     return redirect(url_for('reviews', tab=d['review_type']))
 
+# ===== CHESS =====
+@app.route('/chess')
+def chess():
+    conn = get_db()
+    today_iso = date.today().isoformat()
+
+    base_elo_row = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key='chess_base_elo'").fetchone()
+    try:
+        base_elo = int(base_elo_row['setting_value']) if base_elo_row and base_elo_row['setting_value'] else 800
+    except (TypeError, ValueError):
+        base_elo = 800
+
+    matches = conn.execute('SELECT * FROM chess_matches ORDER BY match_date ASC, id ASC').fetchall()
+    lessons = conn.execute('SELECT * FROM chess_lessons ORDER BY lesson_date DESC, id DESC LIMIT 20').fetchall()
+    curriculum = conn.execute('SELECT * FROM chess_curriculum ORDER BY day_number ASC').fetchall()
+    checklist_row = conn.execute('SELECT * FROM chess_daily_checklist WHERE log_date=?', (today_iso,)).fetchone()
+
+    checklist = {key: 0 for key, _ in CHESS_DAILY_CHECKLIST_KEYS}
+    checklist['log_date'] = today_iso
+    if checklist_row:
+        for key, _ in CHESS_DAILY_CHECKLIST_KEYS:
+            checklist[key] = int(checklist_row[key] or 0)
+
+    elo_running = base_elo
+    elo_chart = []
+    win_count = 0
+    loss_count = 0
+    draw_count = 0
+    for row in matches:
+        change = int(row['elo_change'] or 0)
+        elo_running += change
+        if row['result'] == 'win':
+            win_count += 1
+        elif row['result'] == 'loss':
+            loss_count += 1
+        else:
+            draw_count += 1
+        elo_chart.append({'date': row['match_date'], 'elo': elo_running, 'change': change, 'result': row['result']})
+
+    recent_desc = list(reversed([dict(r) for r in matches]))[:8]
+    completed_days = sum(1 for row in curriculum if row['is_completed'])
+    total_days = len(curriculum)
+    completion_pct = round((completed_days / total_days) * 100, 1) if total_days else 0
+
+    win_streak = 0
+    for row in reversed(matches):
+        if row['result'] == 'win':
+            win_streak += 1
+        else:
+            break
+
+    conn.close()
+    return render_template(
+        'chess.html',
+        base_elo=base_elo,
+        current_elo=elo_running,
+        matches=[dict(r) for r in matches],
+        recent_matches=recent_desc,
+        lessons=[dict(r) for r in lessons],
+        curriculum=[dict(r) for r in curriculum],
+        elo_chart=elo_chart,
+        checklist=checklist,
+        checklist_keys=CHESS_DAILY_CHECKLIST_KEYS,
+        completed_days=completed_days,
+        total_days=total_days,
+        completion_pct=completion_pct,
+        win_count=win_count,
+        loss_count=loss_count,
+        draw_count=draw_count,
+        win_streak=win_streak,
+        today=today_iso,
+    )
+
+@app.route('/chess/match/add', methods=['POST'])
+def chess_match_add():
+    d = request.form
+    result = (d.get('result') or '').strip().lower()
+    if result not in {'win', 'loss', 'draw'}:
+        flash('Invalid chess result.', 'error')
+        return redirect(url_for('chess'))
+    try:
+        elo_change = int(d.get('elo_change') or 0)
+    except (TypeError, ValueError):
+        flash('ELO change must be a number.', 'error')
+        return redirect(url_for('chess'))
+
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO chess_matches (match_date, result, elo_change) VALUES (?,?,?)',
+        (d.get('match_date') or date.today().isoformat(), result, elo_change),
+    )
+    conn.commit()
+    conn.close()
+    flash('Chess game logged.', 'success')
+    return redirect(url_for('chess'))
+
+@app.route('/chess/lesson/add', methods=['POST'])
+def chess_lesson_add():
+    d = request.form
+    topic = (d.get('topic') or '').strip()
+    if not topic:
+        flash('Lesson topic is required.', 'error')
+        return redirect(url_for('chess'))
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO chess_lessons (lesson_date, topic, notes) VALUES (?,?,?)',
+        (d.get('lesson_date') or date.today().isoformat(), topic, d.get('notes') or None),
+    )
+    conn.commit()
+    conn.close()
+    flash('Lesson logged.', 'success')
+    return redirect(url_for('chess'))
+
+@app.route('/chess/checklist/save', methods=['POST'])
+def chess_checklist_save():
+    d = request.form
+    log_date = d.get('log_date') or date.today().isoformat()
+    values = {key: (1 if d.get(key) else 0) for key, _ in CHESS_DAILY_CHECKLIST_KEYS}
+
+    conn = get_db()
+    conn.execute(
+        '''
+        INSERT INTO chess_daily_checklist (log_date, tactical_warmup_done, engine_review_done, lesson_done, rapid_games_done)
+        VALUES (?,?,?,?,?)
+        ON CONFLICT(log_date) DO UPDATE SET
+            tactical_warmup_done=excluded.tactical_warmup_done,
+            engine_review_done=excluded.engine_review_done,
+            lesson_done=excluded.lesson_done,
+            rapid_games_done=excluded.rapid_games_done
+        ''',
+        (log_date, values['tactical_warmup_done'], values['engine_review_done'], values['lesson_done'], values['rapid_games_done'])
+    )
+    conn.commit()
+    conn.close()
+    flash('Daily checklist saved.', 'success')
+    return redirect(url_for('chess'))
+
+@app.route('/chess/curriculum/toggle/<int:day_number>', methods=['POST'])
+def chess_curriculum_toggle(day_number):
+    conn = get_db()
+    row = conn.execute('SELECT is_completed FROM chess_curriculum WHERE day_number=?', (day_number,)).fetchone()
+    if row:
+        next_value = 0 if row['is_completed'] else 1
+        conn.execute(
+            'UPDATE chess_curriculum SET is_completed=?, completed_date=? WHERE day_number=?',
+            (next_value, date.today().isoformat() if next_value else None, day_number)
+        )
+        conn.commit()
+    conn.close()
+    return redirect(url_for('chess'))
+
+@app.route('/chess/settings/save', methods=['POST'])
+def chess_settings_save():
+    d = request.form
+    try:
+        base_elo = int(d.get('chess_base_elo') or 800)
+    except (TypeError, ValueError):
+        flash('Base ELO must be a number.', 'error')
+        return redirect(url_for('chess'))
+    conn = get_db()
+    conn.execute('INSERT OR REPLACE INTO app_settings (setting_key, setting_value) VALUES (?, ?)', ('chess_base_elo', str(base_elo)))
+    conn.commit()
+    conn.close()
+    flash('Chess settings saved.', 'success')
+    return redirect(url_for('chess'))
+
 # ===== SETTINGS =====
 @app.route('/settings')
 def settings():
@@ -3727,6 +3985,19 @@ def backup_gym_progress():
     return jsonify(payload)
 
 
+@app.route('/backup/gym-sync')
+def backup_gym_sync():
+    conn = get_db()
+    payload = dump_tables(conn, GYM_SYNC_TABLES)
+    settings_rows = conn.execute(
+        f"SELECT setting_key, setting_value FROM app_settings WHERE setting_key IN ({','.join('?' for _ in GYM_SYNC_SETTING_KEYS)})",
+        tuple(GYM_SYNC_SETTING_KEYS),
+    ).fetchall()
+    payload['app_settings'] = [dict(row) for row in settings_rows]
+    conn.close()
+    return jsonify(payload)
+
+
 @app.route('/restore/gym-progress', methods=['POST'])
 def restore_gym_progress():
     upload = request.files.get('gym_backup_file')
@@ -3764,6 +4035,56 @@ def restore_gym_progress():
         flash('Could not restore gym progress from that file.', 'error')
     finally:
         conn.execute('PRAGMA foreign_keys = ON')
+        conn.close()
+
+    return redirect(url_for('settings'))
+
+
+@app.route('/restore/gym-sync', methods=['POST'])
+def restore_gym_sync():
+    upload = request.files.get('gym_sync_file')
+    if not upload or not upload.filename:
+        flash('Please choose a gym sync JSON file first.', 'error')
+        return redirect(url_for('settings'))
+
+    try:
+        incoming = json.loads(upload.read().decode('utf-8'))
+    except Exception:
+        flash('Invalid JSON file.', 'error')
+        return redirect(url_for('settings'))
+
+    if not isinstance(incoming, dict):
+        flash('Invalid sync payload format.', 'error')
+        return redirect(url_for('settings'))
+
+    conn = get_db()
+    try:
+        conn.execute('DELETE FROM daily_steps')
+        conn.execute('DELETE FROM body_stats')
+        conn.execute(
+            f"DELETE FROM app_settings WHERE setting_key IN ({','.join('?' for _ in GYM_SYNC_SETTING_KEYS)})",
+            tuple(GYM_SYNC_SETTING_KEYS),
+        )
+
+        for table in GYM_SYNC_TABLES:
+            rows = incoming.get(table, [])
+            if isinstance(rows, list):
+                restore_table_rows(conn, table, rows)
+
+        settings_rows = incoming.get('app_settings', [])
+        if isinstance(settings_rows, list):
+            for row in settings_rows:
+                key = row.get('setting_key') if isinstance(row, dict) else None
+                value = row.get('setting_value') if isinstance(row, dict) else None
+                if key in GYM_SYNC_SETTING_KEYS:
+                    conn.execute('INSERT OR REPLACE INTO app_settings (setting_key, setting_value) VALUES (?, ?)', (key, value))
+
+        conn.commit()
+        flash('Gym sync import complete for weight, steps, and measurements.', 'success')
+    except Exception:
+        conn.rollback()
+        flash('Could not import gym sync data.', 'error')
+    finally:
         conn.close()
 
     return redirect(url_for('settings'))
