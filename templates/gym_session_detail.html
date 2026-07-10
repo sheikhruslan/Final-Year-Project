@@ -41,7 +41,7 @@
                 {% endif %}
                 <div class="px-4 py-3 text-gray-700 dark:text-gray-300">
                     {% if session.workout_name == 'HIIT Cardio' and row.set_type == 'interval' %}
-                    <div>Round {{ row.set_number }} · {{ row.time_seconds if row.time_seconds else 0 }}s sprint · {{ row.incline|int if row.incline else 0 }}s rest · {{ (row.time_seconds if row.time_seconds else 0) + (row.incline|int if row.incline else 0) }}s total</div>
+                    <div>Round {{ row.set_number }} · {{ row.time_seconds if row.time_seconds else 0 }}s sprint · {{ row.incline|int if row.incline else 0 }}s rest · {{ (row.time_seconds if row.time_seconds else 0) + (row.incline|int if row.incline else 0) }}s total{% if row.notes %} · {{ row.notes }}{% endif %}</div>
                     {% elif row.set_type == 'interval' and row.distance_km %}
                     {% set pace_total_sec = (row.time_seconds / row.distance_km)|int if row.time_seconds and row.distance_km and row.distance_km > 0 else None %}
                     <div>
@@ -52,9 +52,10 @@
                         {% if pace_total_sec %}
                          · {{ pace_total_sec // 60 }}:{{ '%02d'|format(pace_total_sec % 60) }} /km
                         {% endif %}
+                        {% if row.notes %} · {{ row.notes }}{% endif %}
                     </div>
                     {% elif row.set_type == 'interval' %}
-                    <div>Set {{ row.set_number }} · {{ row.speed if row.speed else 0 }} km/h · {{ row.incline if row.incline else 0 }}% incline · {{ row.time_seconds if row.time_seconds else 0 }} sec</div>
+                    <div>Set {{ row.set_number }} · {{ row.speed if row.speed else 0 }} km/h · {{ row.incline if row.incline else 0 }}% incline · {{ row.time_seconds if row.time_seconds else 0 }} sec{% if row.notes %} · {{ row.notes }}{% endif %}</div>
                     {% else %}
                     <div>Set {{ row.set_number }} <span class="text-xs text-gray-500 dark:text-gray-400">({{ row.set_type }})</span> · {{ row.weight_kg if row.weight_kg else 0 }} kg × {{ row.reps if row.reps else 0 }} reps</div>
                     {% endif %}

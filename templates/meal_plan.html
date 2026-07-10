@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Meal Plan{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold">Meal Plan</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Plan weekly meals, predict grocery cost, sync ingredients to shopping, and auto-log eaten meals to Diet.</p>
+        </div>
+        <div class="flex gap-2 text-sm">
+            <a href="/meal-plan?week_start={{ (week_start|tojson) }}" class="hidden"></a>
+            <form method="GET" action="/meal-plan" class="flex items-center gap-2">
+                <label class="text-gray-500 dark:text-gray-400">Week start</label>
+                <input type="date" name="week_start" value="{{ week_start }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="bg-blue-600 text-white px-3 py-2 rounded">Go</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Week Range</div>
+            <div class="text-lg font-bold mt-1">{{ week_start }} to {{ week_end }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Planned Meals</div>
+            <div class="text-2xl font-bold text-blue-600 mt-1">{{ entries|length }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Weekly Food Cost</div>
+            <div class="text-2xl font-bold text-amber-600 mt-1">{{ '%.2f'|format(weekly_cost) }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Weekly Calories</div>
+            <div class="text-2xl font-bold text-emerald-600 mt-1">{{ '%.0f'|format(weekly_calories) }}</div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Create Dish</h2>
+            <form action="/meal-plan/dish/add" method="POST" class="space-y-3 text-sm">
+                <input type="text" name="name" required placeholder="Dish name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <select name="meal_type" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner" selected>Dinner</option>
+                    <option value="snack">Snack</option>
+                </select>
+                <textarea name="notes" rows="2" placeholder="Dish notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"></textarea>
+                <div id="ingredientRows" class="space-y-2">
+                    <div class="grid grid-cols-5 gap-2 ingredient-row">
+                        <input type="text" name="ingredient_name[]" placeholder="Ingredient" class="col-span-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input type="number" step="0.1" name="ingredient_quantity[]" placeholder="Qty" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input type="text" name="ingredient_unit[]" placeholder="Unit" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input type="number" step="0.01" name="ingredient_cost[]" placeholder="Cost" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    </div>
+                    <div class="grid grid-cols-5 gap-2 ingredient-row">
+                        <div class="col-span-2"></div>
+                        <input type="number" step="0.1" name="ingredient_calories[]" placeholder="Calories" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <label class="col-span-2 flex items-center gap-2 rounded border border-gray-200 dark:border-gray-700 px-3 py-2"><input type="checkbox" name="ingredient_grocery[]" value="0" checked> <span>Add to grocery</span></label>
+                    </div>
+                </div>
+                <button type="button" onclick="addIngredientRow()" class="w-full bg-gray-200 dark:bg-gray-700 rounded py-2">+ Add Ingredient</button>
+                <button class="w-full bg-blue-600 text-white rounded py-2">Save Dish</button>
+            </form>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Schedule Meals</h2>
+            <form action="/meal-plan/entry/add" method="POST" class="space-y-3 text-sm">
+                <input type="hidden" name="week_start" value="{{ week_start }}">
+                <input type="date" name="planned_date" value="{{ week_start }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <select name="dish_id" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    {% for dish in dishes %}
+                    <option value="{{ dish.id }}">{{ dish.name }}</option>
+                    {% endfor %}
+                </select>
+                <select name="meal_type" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <option value="breakfast">Breakfast</option>
+                    <option value="lunch">Lunch</option>
+                    <option value="dinner">Dinner</option>
+                    <option value="snack">Snack</option>
+                </select>
+                <input type="number" step="0.25" min="0.25" name="servings" value="1" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2" placeholder="Servings">
+                <textarea name="notes" rows="2" placeholder="Optional notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"></textarea>
+                <button class="w-full bg-emerald-600 text-white rounded py-2">Add to Week</button>
+            </form>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="font-semibold">Grocery Sync</h2>
+                <form action="/meal-plan/sync-grocery" method="POST">
+                    <input type="hidden" name="week_start" value="{{ week_start }}">
+                    <button class="bg-amber-500 text-white px-3 py-2 rounded text-sm">Sync to Shopping</button>
+                </form>
+            </div>
+            <div class="space-y-2 max-h-80 overflow-y-auto text-sm">
+                {% for item in grocery_items %}
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="font-medium">{{ item.ingredient_name }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ '%.2f'|format(item.estimated_cost) }}</div>
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ item.quantity }} {{ item.unit }} · {{ item.sources|join(', ') }}</div>
+                </div>
+                {% else %}
+                <p class="text-gray-400">No grocery items calculated yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+        <h2 class="font-semibold mb-3">Weekly Menu</h2>
+        <div class="space-y-3">
+            {% for day in weekdays %}
+            <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 font-medium">{{ day.label }} · {{ day.date }}</div>
+                <div class="divide-y divide-gray-100 dark:divide-gray-700/70">
+                    {% set day_entries = entries | selectattr('planned_date', 'equalto', day.date) | list %}
+                    {% if day_entries %}
+                        {% for entry in day_entries %}
+                        <div class="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
+                            <div>
+                                <div class="font-medium">{{ entry.dish_name }} <span class="text-xs text-gray-500 dark:text-gray-400">{{ entry.meal_type|title }} · {{ entry.servings }} serving(s)</span></div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ '%.0f'|format(entry.total_calories) }} kcal · {{ '%.2f'|format(entry.total_cost) }} cost</div>
+                                {% if entry.notes %}<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ entry.notes }}</div>{% endif %}
+                            </div>
+                            <div class="flex gap-2">
+                                <form action="/meal-plan/entry/toggle/{{ entry.id }}" method="POST">
+                                    <input type="hidden" name="week_start" value="{{ week_start }}">
+                                    <button class="px-3 py-2 rounded text-xs {% if entry.is_eaten %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400{% else %}bg-gray-100 dark:bg-gray-700{% endif %}">{{ 'Eaten' if entry.is_eaten else 'Mark eaten' }}</button>
+                                </form>
+                                <form action="/meal-plan/entry/eat/{{ entry.id }}" method="POST">
+                                    <input type="hidden" name="week_start" value="{{ week_start }}">
+                                    <button class="px-3 py-2 rounded text-xs bg-blue-600 text-white">Log to Diet</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">No meals planned.</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function addIngredientRow() {
+    const container = document.getElementById('ingredientRows');
+    const index = container.querySelectorAll('.ingredient-row').length / 2;
+    const checkboxValue = String(index);
+    const html = `
+        <div class="grid grid-cols-5 gap-2 ingredient-row mt-2">
+            <input type="text" name="ingredient_name[]" placeholder="Ingredient" class="col-span-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+            <input type="number" step="0.1" name="ingredient_quantity[]" placeholder="Qty" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+            <input type="text" name="ingredient_unit[]" placeholder="Unit" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+            <input type="number" step="0.01" name="ingredient_cost[]" placeholder="Cost" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+        </div>
+        <div class="grid grid-cols-5 gap-2 ingredient-row mt-2">
+            <div class="col-span-2"></div>
+            <input type="number" step="0.1" name="ingredient_calories[]" placeholder="Calories" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+            <label class="col-span-2 flex items-center gap-2 rounded border border-gray-200 dark:border-gray-700 px-3 py-2"><input type="checkbox" name="ingredient_grocery[]" value="${checkboxValue}" checked> <span>Add to grocery</span></label>
+        </div>`;
+    container.insertAdjacentHTML('beforeend', html);
+}
+</script>
+{% endblock %}

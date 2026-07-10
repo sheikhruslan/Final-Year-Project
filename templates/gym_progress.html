@@ -1,11 +1,184 @@
 {% extends "base.html" %}
 {% block title %}Gym Progress{% endblock %}
 {% block content %}
+<style>
+    .gp-hero {
+        background:
+            radial-gradient(900px 260px at 0% 0%, rgba(14, 116, 144, 0.22), transparent 55%),
+            radial-gradient(820px 260px at 100% 60%, rgba(2, 132, 199, 0.20), transparent 60%),
+            linear-gradient(130deg, #0f172a, #1e293b 60%, #0b1324);
+    }
+    .gp-rise { animation: gpRise .45s ease both; }
+    .gp-rise.delay-1 { animation-delay: .08s; }
+    .gp-rise.delay-2 { animation-delay: .16s; }
+    @keyframes gpRise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
 <div class="space-y-6">
     <div class="flex items-center justify-between gap-3">
         <h1 class="text-2xl font-bold">📈 Gym Progress</h1>
         <a href="/gym" class="text-xs bg-gray-700 text-white px-3 py-2 rounded hover:bg-gray-800">Back to Gym Log</a>
     </div>
+
+    <section class="gp-hero rounded-2xl p-5 text-white gp-rise">
+        <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+                <p class="text-xs uppercase tracking-[0.2em] text-cyan-100/90">Body Composition + Cardio Fitness</p>
+                <h2 class="text-2xl md:text-3xl font-bold mt-1">InBody and VO2 Intelligence</h2>
+                <p class="text-sm text-cyan-100/90 mt-2">Auto-computed composition metrics, visual trends, and monthly VO2 triangulation tracking.</p>
+            </div>
+            {% if inbody.latest %}
+            <div class="grid grid-cols-2 gap-2 text-sm w-full md:w-auto">
+                <div class="bg-white/10 rounded-lg px-3 py-2">
+                    <div class="text-[11px] text-cyan-100/80">Latest InBody Score</div>
+                    <div class="font-semibold">{{ '%.0f'|format(inbody.latest.inbody_score) if inbody.latest.inbody_score is not none else 'N/A' }}</div>
+                </div>
+                <div class="bg-white/10 rounded-lg px-3 py-2">
+                    <div class="text-[11px] text-cyan-100/80">Latest VO2 max</div>
+                    <div class="font-semibold">{{ '%.2f'|format(vo2.latest.vo2_max) if vo2.latest else 'N/A' }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm gp-rise delay-1">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-semibold">InBody Trend Dashboard</h2>
+                {% if inbody.latest %}<span class="text-xs text-gray-500 dark:text-gray-400">Latest: {{ inbody.latest.test_datetime }}</span>{% endif %}
+            </div>
+            {% if inbody.has_data %}
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4 text-sm">
+                <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Weight</div>
+                    <div class="font-semibold">{{ '%.1f kg'|format(inbody.latest.weight_kg) if inbody.latest.weight_kg is not none else 'N/A' }}</div>
+                </div>
+                <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Body Fat %</div>
+                    <div class="font-semibold">{{ '%.1f%%'|format(inbody.latest.pbf) if inbody.latest.pbf is not none else 'N/A' }}</div>
+                </div>
+                <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">SMM</div>
+                    <div class="font-semibold">{{ '%.1f kg'|format(inbody.latest.smm_kg) if inbody.latest.smm_kg is not none else 'N/A' }}</div>
+                </div>
+                <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">Lean Body Mass</div>
+                    <div class="font-semibold">{{ '%.1f kg'|format(inbody.latest.lean_body_mass_kg) if inbody.latest.lean_body_mass_kg is not none else 'N/A' }}</div>
+                </div>
+                <div class="rounded-lg bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 p-3">
+                    <div class="text-xs text-gray-500 dark:text-gray-400">FFMI</div>
+                    <div class="font-semibold">{{ '%.2f'|format(inbody.latest.ffmi) if inbody.latest.ffmi is not none else 'N/A' }}</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Weight / Muscle / Fat</h3>
+                    <canvas id="inbodyCompositionChart" height="170"></canvas>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Body Fat % + Score</h3>
+                    <canvas id="inbodyQualityChart" height="170"></canvas>
+                </div>
+            </div>
+            {% if inbody.latest.insights %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                {% for insight in inbody.latest.insights %}
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-gray-50 dark:bg-gray-900/40">{{ insight }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400">No InBody entries yet. Add your first scan below.</p>
+            {% endif %}
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm gp-rise delay-1 space-y-4">
+            <h2 class="font-semibold">Add InBody Scan</h2>
+            <form method="POST" action="/gym/inbody/save" class="space-y-3 text-sm max-h-[34rem] overflow-y-auto pr-1">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="datetime-local" name="test_datetime" value="{{ today }}T16:25" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="text" name="source_label" value="InBody120" placeholder="Device" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="number" step="0.1" name="height_cm" placeholder="Height cm" value="178" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="1" name="age" placeholder="Age" value="22" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="number" step="0.1" name="weight_kg" placeholder="Weight kg" value="75.3" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="smm_kg" placeholder="SMM kg" value="33.0" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="body_fat_mass_kg" placeholder="Body fat mass kg" value="16.4" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="pbf" placeholder="PBF % (optional)" value="21.7" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="total_body_water_l" placeholder="TBW L" value="43.1" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="protein_kg" placeholder="Protein kg" value="11.6" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.01" name="minerals_kg" placeholder="Minerals kg" value="4.18" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="inbody_score" placeholder="InBody score" value="73" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="bmr" placeholder="BMR" value="1642" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.01" name="whr" placeholder="WHR" value="0.89" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                </div>
+                <textarea name="notes" rows="2" placeholder="Optional notes" class="w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2"></textarea>
+                <button class="w-full rounded bg-cyan-700 hover:bg-cyan-800 text-white px-4 py-2 font-medium">Save InBody Scan</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm gp-rise delay-2">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-semibold">VO2 Max Monthly Tracker</h2>
+                {% if vo2.latest %}<span class="text-xs text-gray-500 dark:text-gray-400">Latest {{ vo2.latest.test_date }} · {{ vo2.latest.method|title }}</span>{% endif %}
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Triangulation method: track Cooper (core baseline), Beep (anaerobic grit), and Rockport (low-stress check) separately.</p>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Monthly VO2 Average</h3>
+                    <canvas id="vo2MonthlyChart" height="170"></canvas>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Method Breakdown</h3>
+                    <canvas id="vo2MethodChart" height="170"></canvas>
+                </div>
+            </div>
+            {% if vo2.insights %}
+            <div class="grid grid-cols-1 gap-2 text-sm">
+                {% for insight in vo2.insights %}
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 bg-gray-50 dark:bg-gray-900/40">{{ insight }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm gp-rise delay-2 space-y-3">
+            <h2 class="font-semibold">Log VO2 Test</h2>
+            <form method="POST" action="/gym/vo2/save" class="space-y-2 text-sm">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="date" name="test_date" value="{{ today }}" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <select name="method" id="vo2Method" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2" onchange="toggleVo2Inputs()">
+                        <option value="cooper">Cooper 12-min</option>
+                        <option value="beep">Beep Test</option>
+                        <option value="rockport">Rockport Walk</option>
+                    </select>
+                </div>
+                <div id="vo2CooperWrap">
+                    <input type="number" step="1" name="distance_m" placeholder="Distance in meters (Cooper)" class="w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                </div>
+                <div id="vo2BeepWrap" class="hidden grid grid-cols-2 gap-2">
+                    <input type="number" step="0.1" name="beep_level" placeholder="Beep level" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="1" name="beep_shuttles" placeholder="Shuttles" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                </div>
+                <div id="vo2RockportWrap" class="hidden grid grid-cols-2 gap-2">
+                    <input type="number" step="0.1" name="weight_kg" placeholder="Weight kg" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="1" name="age" placeholder="Age" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="0.1" name="time_minutes" placeholder="Time minutes" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                    <input type="number" step="1" name="heart_rate" placeholder="HR at finish" class="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2">
+                </div>
+                <textarea name="notes" rows="2" placeholder="Optional context" class="w-full rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2"></textarea>
+                <button class="w-full rounded bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 font-medium">Compute + Save VO2</button>
+            </form>
+        </div>
+    </section>
 
     {% if muscle_group_summaries %}
     <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
@@ -232,7 +405,113 @@ const cardioMinutesByWeek = {{ cardio_minutes_by_week|tojson }};
 const cardioCaloriesTrend = {{ cardio_calories_trend|tojson }};
 const fullStepLogs = {{ step_logs|tojson }};
 const bodyMeasurements = {{ body_measurements|tojson }};
+const inbodyPayload = {{ inbody|tojson }};
+const vo2Payload = {{ vo2|tojson }};
 const chartRegistry = {};
+
+function toggleVo2Inputs() {
+    const method = document.getElementById('vo2Method')?.value || 'cooper';
+    const cooper = document.getElementById('vo2CooperWrap');
+    const beep = document.getElementById('vo2BeepWrap');
+    const rockport = document.getElementById('vo2RockportWrap');
+    if (cooper) cooper.classList.toggle('hidden', method !== 'cooper');
+    if (beep) beep.classList.toggle('hidden', method !== 'beep');
+    if (rockport) rockport.classList.toggle('hidden', method !== 'rockport');
+}
+
+toggleVo2Inputs();
+
+if ((inbodyPayload.chart?.labels || []).length) {
+    const c1 = document.getElementById('inbodyCompositionChart');
+    if (c1) {
+        new Chart(c1, {
+            type: 'line',
+            data: {
+                labels: inbodyPayload.chart.labels,
+                datasets: [
+                    { label: 'Weight', data: inbodyPayload.chart.weight, borderColor: '#0ea5e9', backgroundColor: '#0ea5e920', tension: 0.25, fill: false },
+                    { label: 'SMM', data: inbodyPayload.chart.smm, borderColor: '#16a34a', backgroundColor: '#16a34a20', tension: 0.25, fill: false },
+                    { label: 'Fat Mass', data: inbodyPayload.chart.fat_mass, borderColor: '#ef4444', backgroundColor: '#ef444420', tension: 0.25, fill: false }
+                ]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+    }
+
+    const c2 = document.getElementById('inbodyQualityChart');
+    if (c2) {
+        new Chart(c2, {
+            data: {
+                labels: inbodyPayload.chart.labels,
+                datasets: [
+                    { type: 'line', label: 'PBF %', data: inbodyPayload.chart.pbf, borderColor: '#f97316', backgroundColor: '#f9731620', yAxisID: 'y', tension: 0.25 },
+                    { type: 'bar', label: 'InBody Score', data: inbodyPayload.chart.score, borderColor: '#6366f1', backgroundColor: '#6366f166', yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom' } },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Body Fat %' } },
+                    y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Score' } }
+                }
+            }
+        });
+    }
+}
+
+if ((vo2Payload.monthly_series || []).length) {
+    const vm = document.getElementById('vo2MonthlyChart');
+    if (vm) {
+        new Chart(vm, {
+            type: 'line',
+            data: {
+                labels: vo2Payload.monthly_series.map(item => item.month),
+                datasets: [{
+                    label: 'Monthly avg VO2 max',
+                    data: vo2Payload.monthly_series.map(item => item.vo2),
+                    borderColor: '#059669',
+                    backgroundColor: '#05966920',
+                    fill: true,
+                    tension: 0.25,
+                    pointRadius: 3,
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+    }
+}
+
+if ((vo2Payload.tests || []).length) {
+    const byMethod = { cooper: [], beep: [], rockport: [] };
+    (vo2Payload.tests || []).forEach(item => {
+        byMethod[item.method] = byMethod[item.method] || [];
+        byMethod[item.method].push(Number(item.vo2_max || 0));
+    });
+    const methodAvg = ['cooper', 'beep', 'rockport'].map(method => {
+        const vals = byMethod[method] || [];
+        if (!vals.length) return 0;
+        return Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2));
+    });
+
+    const vmethod = document.getElementById('vo2MethodChart');
+    if (vmethod) {
+        new Chart(vmethod, {
+            type: 'bar',
+            data: {
+                labels: ['Cooper', 'Beep', 'Rockport'],
+                datasets: [{
+                    label: 'Average VO2 max',
+                    data: methodAvg,
+                    backgroundColor: ['#0284c7aa', '#9333eaaa', '#f97316aa'],
+                    borderColor: ['#0284c7', '#9333ea', '#f97316'],
+                    borderWidth: 1,
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+}
 
 if ((bodyMeasurements.structure_chart || []).length) {
     const measurementCanvas = document.getElementById('measurementProfileChart');

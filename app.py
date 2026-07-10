@@ -65,6 +65,8 @@ GYM_SYNC_SETTING_KEYS = [
     'measurement_calf_cm',
 ]
 
+WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
 CHESS_DAILY_CHECKLIST_KEYS = [
     ('tactical_warmup_done', 'Tactical warmup complete'),
     ('engine_review_done', 'Engine review complete'),
@@ -679,6 +681,202 @@ def _safe_float(value):
     except (TypeError, ValueError):
         return None
 
+def _safe_int(value):
+    try:
+        if value in (None, ''):
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+def compute_inbody_derived(scan):
+    height_cm = _safe_float(scan.get('height_cm'))
+    weight_kg = _safe_float(scan.get('weight_kg'))
+    fat_mass = _safe_float(scan.get('body_fat_mass_kg'))
+    smm_kg = _safe_float(scan.get('smm_kg'))
+    tbw = _safe_float(scan.get('total_body_water_l'))
+    protein = _safe_float(scan.get('protein_kg'))
+    minerals = _safe_float(scan.get('minerals_kg'))
+    bmr = _safe_float(scan.get('bmr'))
+    whr = _safe_float(scan.get('whr'))
+    visceral_level = _safe_float(scan.get('visceral_fat_level'))
+
+    bmi = _safe_float(scan.get('bmi'))
+    if bmi is None and height_cm and weight_kg and height_cm > 0:
+        bmi = round(weight_kg / ((height_cm / 100) ** 2), 1)
+
+    pbf = _safe_float(scan.get('pbf'))
+    if pbf is None and fat_mass is not None and weight_kg and weight_kg > 0:
+        pbf = round((fat_mass / weight_kg) * 100, 1)
+
+    lean_body_mass = None
+    if weight_kg is not None and fat_mass is not None:
+        lean_body_mass = round(weight_kg - fat_mass, 1)
+
+    ffmi = None
+    fmi = None
+    if height_cm and height_cm > 0 and lean_body_mass is not None and fat_mass is not None:
+        h2 = (height_cm / 100) ** 2
+        ffmi = round(lean_body_mass / h2, 2)
+        fmi = round(fat_mass / h2, 2)
+
+    muscle_ratio_pct = round((smm_kg / weight_kg) * 100, 1) if smm_kg is not None and weight_kg and weight_kg > 0 else None
+    hydration_ratio_pct = round((tbw / weight_kg) * 100, 1) if tbw is not None and weight_kg and weight_kg > 0 else None
+    protein_ratio_pct = round((protein / weight_kg) * 100, 1) if protein is not None and weight_kg and weight_kg > 0 else None
+    minerals_ratio_pct = round((minerals / weight_kg) * 100, 1) if minerals is not None and weight_kg and weight_kg > 0 else None
+    bmr_per_kg = round(bmr / weight_kg, 1) if bmr is not None and weight_kg and weight_kg > 0 else None
+
+    score = _safe_float(scan.get('inbody_score'))
+    if score is not None:
+        if score >= 90:
+            score_band = 'elite'
+        elif score >= 80:
+            score_band = 'strong'
+        elif score >= 70:
+            score_band = 'average'
+        else:
+            score_band = 'needs_work'
+    else:
+        score_band = 'unknown'
+
+    central_fat_risk = 'elevated' if (whr is not None and whr >= 0.9) or (visceral_level is not None and visceral_level >= 8) else 'managed'
+
+    insights = []
+    if pbf is not None:
+        if pbf >= 20:
+            insights.append(f'Body fat is {pbf:.1f}%. Cutting toward 15-18% would likely improve definition and InBody score.')
+        else:
+            insights.append(f'Body fat is {pbf:.1f}%, already in a strong zone for recomposition.')
+    if muscle_ratio_pct is not None:
+        insights.append(f'Skeletal muscle is {muscle_ratio_pct:.1f}% of body weight.')
+    if central_fat_risk == 'elevated':
+        insights.append('Waist/visceral metrics suggest central fat focus should stay a priority this cycle.')
+    if bmr_per_kg is not None:
+        insights.append(f'Basal metabolic rate is {bmr_per_kg:.1f} kcal/kg/day.')
+
+    return {
+        'bmi': bmi,
+        'pbf': pbf,
+        'lean_body_mass_kg': lean_body_mass,
+        'ffmi': ffmi,
+        'fmi': fmi,
+        'muscle_ratio_pct': muscle_ratio_pct,
+        'hydration_ratio_pct': hydration_ratio_pct,
+        'protein_ratio_pct': protein_ratio_pct,
+        'minerals_ratio_pct': minerals_ratio_pct,
+        'bmr_per_kg': bmr_per_kg,
+        'score_band': score_band,
+        'central_fat_risk': central_fat_risk,
+        'insights': insights,
+    }
+
+def build_inbody_payload(conn):
+    rows = conn.execute('SELECT * FROM inbody_scans ORDER BY test_datetime ASC, id ASC').fetchall()
+    scans = []
+    for row in rows:
+        item = dict(row)
+        item.update(compute_inbody_derived(item))
+        for key in ('segmental_lean_json', 'segmental_fat_json', 'impedance_json'):
+            raw = item.get(key)
+            if raw:
+                try:
+                    item[key.replace('_json', '')] = json.loads(raw)
+                except Exception:
+                    item[key.replace('_json', '')] = []
+            else:
+                item[key.replace('_json', '')] = []
+        scans.append(item)
+
+    latest = scans[-1] if scans else None
+    chart = {
+        'labels': [s['test_datetime'][:10] for s in scans],
+        'weight': [round(float(s['weight_kg']), 2) if s.get('weight_kg') is not None else None for s in scans],
+        'smm': [round(float(s['smm_kg']), 2) if s.get('smm_kg') is not None else None for s in scans],
+        'pbf': [round(float(s['pbf']), 2) if s.get('pbf') is not None else None for s in scans],
+        'fat_mass': [round(float(s['body_fat_mass_kg']), 2) if s.get('body_fat_mass_kg') is not None else None for s in scans],
+        'score': [round(float(s['inbody_score']), 1) if s.get('inbody_score') is not None else None for s in scans],
+    }
+
+    return {
+        'scans': scans,
+        'latest': latest,
+        'chart': chart,
+        'has_data': bool(scans),
+    }
+
+def calculate_vo2_max(method, data):
+    if method == 'cooper':
+        distance_m = _safe_float(data.get('distance_m'))
+        if distance_m is None:
+            return None
+        return round((distance_m - 504.9) / 44.73, 2)
+
+    if method == 'beep':
+        level = _safe_float(data.get('beep_level'))
+        shuttles = _safe_int(data.get('beep_shuttles')) or 0
+        if level is None:
+            return None
+        effective_level = level + (shuttles / 60.0)
+        speed_kmh = 8 + 0.5 * max(0, effective_level - 1)
+        return round((3.46 * speed_kmh) + 14.4, 2)
+
+    if method == 'rockport':
+        weight_kg = _safe_float(data.get('weight_kg'))
+        age = _safe_int(data.get('age'))
+        heart_rate = _safe_int(data.get('heart_rate'))
+        time_minutes = _safe_float(data.get('time_minutes'))
+        sex = (data.get('sex') or 'male').strip().lower()
+        if None in (weight_kg, age, heart_rate, time_minutes):
+            return None
+        weight_lb = weight_kg * 2.20462
+        sex_flag = 1 if sex == 'male' else 0
+        vo2 = 132.853 - (0.0769 * weight_lb) - (0.3877 * age) + (6.315 * sex_flag) - (3.2649 * time_minutes) - (0.1565 * heart_rate)
+        return round(vo2, 2)
+
+    return None
+
+def build_vo2_payload(conn):
+    rows = conn.execute('SELECT * FROM vo2_tests ORDER BY test_date ASC, id ASC').fetchall()
+    tests = [dict(row) for row in rows]
+
+    monthly = defaultdict(list)
+    by_method = {'cooper': [], 'beep': [], 'rockport': []}
+    for row in tests:
+        month = (row['test_date'] or '')[:7]
+        if month:
+            monthly[month].append(float(row['vo2_max']))
+        by_method.setdefault(row['method'], []).append(row)
+
+    monthly_series = [{'month': key, 'vo2': round(sum(vals) / len(vals), 2)} for key, vals in sorted(monthly.items())]
+    latest = tests[-1] if tests else None
+
+    profile_insights = []
+    if latest:
+        val = float(latest['vo2_max'])
+        if val >= 52:
+            band = 'excellent'
+        elif val >= 46:
+            band = 'good'
+        elif val >= 40:
+            band = 'average'
+        else:
+            band = 'below average'
+        profile_insights.append(f'Latest VO2 max is {val:.2f} ({band}) via {latest["method"].title()} test.')
+
+    if len(monthly_series) >= 2:
+        trend_delta = monthly_series[-1]['vo2'] - monthly_series[0]['vo2']
+        direction = 'up' if trend_delta > 0 else 'down' if trend_delta < 0 else 'flat'
+        profile_insights.append(f'Monthly VO2 trend is {direction} by {trend_delta:.2f} from first logged month.')
+
+    return {
+        'tests': tests,
+        'latest': latest,
+        'monthly_series': monthly_series,
+        'by_method': by_method,
+        'insights': profile_insights,
+        'has_data': bool(tests),
+    }
+
 def build_body_measurements_payload(conn):
     settings_rows = conn.execute(
         "SELECT setting_key, setting_value FROM app_settings WHERE setting_key='diet_body_fat_pct' OR setting_key='body_measurements_date' OR setting_key LIKE 'measurement_%'"
@@ -1211,6 +1409,12 @@ def estimate_hiit_interval_calories(weight_kg, sprint_seconds, rest_seconds):
     calories_per_min = (3.5 * float(weight_kg)) / 200
     return round((((sprint_met * sprint_minutes) + (rest_met * rest_minutes)) * calories_per_min), 1)
 
+def estimate_met_calories(weight_kg, met_value, duration_minutes):
+    if not weight_kg or not met_value or not duration_minutes or float(duration_minutes) <= 0:
+        return 0
+    calories_per_min = (float(met_value) * 3.5 * float(weight_kg)) / 200
+    return round(calories_per_min * float(duration_minutes), 1)
+
 def get_effective_weight_for_date(conn, target_date):
     row = conn.execute(
         'SELECT weight_kg FROM body_stats WHERE log_date <= ? ORDER BY log_date DESC, id DESC LIMIT 1',
@@ -1347,6 +1551,431 @@ def build_diet_payload(conn, selected_date):
         'saved_meals': [dict(row) for row in saved_meals],
         'deficit_chart': deficit_chart,
         'protein_chart': protein_chart
+    }
+
+def add_months(dt, months):
+    month = dt.month - 1 + months
+    year = dt.year + month // 12
+    month = month % 12 + 1
+    month_lengths = [31, 29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    day = min(dt.day, month_lengths[month - 1])
+    return date(year, month, day)
+
+def monthlyize_amount(amount, cadence):
+    amount = float(amount or 0)
+    if cadence == 'weekly':
+        return amount * 52 / 12
+    if cadence == 'yearly':
+        return amount / 12
+    return amount
+
+def get_week_start(day_obj=None):
+    day_obj = day_obj or date.today()
+    return day_obj - timedelta(days=day_obj.weekday())
+
+def get_month_start(month_value=None):
+    if month_value:
+        try:
+            return datetime.strptime(f'{month_value}-01', '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    today = date.today()
+    return date(today.year, today.month, 1)
+
+def build_gym_schedule_payload(conn, month_value=None):
+    month_start = get_month_start(month_value)
+    month_end = add_months(month_start, 1) - timedelta(days=1)
+    grid_start = month_start - timedelta(days=month_start.weekday())
+    grid_end = month_end + timedelta(days=(6 - month_end.weekday()))
+
+    rules = [dict(row) for row in conn.execute('''
+        SELECT wsr.*, wt.name as workout_name, wt.is_cardio
+        FROM workout_schedule_rules wsr
+        LEFT JOIN workout_types wt ON wt.id = wsr.workout_type_id
+        WHERE wsr.is_active=1
+        ORDER BY wsr.weekday, wsr.id
+    ''').fetchall()]
+    overrides = [dict(row) for row in conn.execute('''
+        SELECT wso.*, wt.name as workout_name, wt.is_cardio
+        FROM workout_schedule_overrides wso
+        LEFT JOIN workout_types wt ON wt.id = wso.workout_type_id
+        WHERE wso.override_date BETWEEN ? AND ?
+        ORDER BY wso.override_date, wso.id
+    ''', (grid_start.isoformat(), grid_end.isoformat())).fetchall()]
+    session_counts = {
+        row['session_date']: row['c']
+        for row in conn.execute('''
+            SELECT session_date, COUNT(*) as c
+            FROM workout_sessions
+            WHERE session_date BETWEEN ? AND ?
+            GROUP BY session_date
+        ''', (grid_start.isoformat(), grid_end.isoformat())).fetchall()
+    }
+
+    rules_by_weekday = defaultdict(list)
+    for row in rules:
+        row['weekday_label'] = WEEKDAY_LABELS[row['weekday']]
+        rules_by_weekday[row['weekday']].append(row)
+
+    overrides_by_date = defaultdict(list)
+    for row in overrides:
+        overrides_by_date[row['override_date']].append(row)
+
+    def make_schedule_item(row, target_day, source='rule', fallback_rule=None, skipped=False):
+        fallback_rule = fallback_rule or {}
+        workout_type_id = row.get('workout_type_id') or fallback_rule.get('workout_type_id')
+        workout_name = row.get('workout_name') or fallback_rule.get('workout_name')
+        title = (row.get('title') or fallback_rule.get('title') or workout_name or 'Custom Session').strip()
+        notes = row.get('notes') or fallback_rule.get('notes') or None
+        is_cardio = row.get('is_cardio') if row.get('is_cardio') is not None else fallback_rule.get('is_cardio')
+        rule_id = row['id'] if source == 'rule' else row.get('rule_id')
+        override_id = None if source == 'rule' else row.get('id')
+        return {
+            'source': source,
+            'rule_id': rule_id,
+            'override_id': override_id,
+            'title': title,
+            'notes': notes,
+            'workout_type_id': workout_type_id,
+            'workout_name': workout_name,
+            'is_cardio': bool(is_cardio) if is_cardio is not None else None,
+            'is_skipped': skipped,
+            'can_start': bool(workout_type_id) and not skipped,
+            'start_url': f'/gym/session/new/{workout_type_id}?session_date={target_day.isoformat()}' if workout_type_id and not skipped else None,
+        }
+
+    weeks = []
+    cursor = grid_start
+    while cursor <= grid_end:
+        week = []
+        for _ in range(7):
+            day_key = cursor.isoformat()
+            matching_rules = []
+            for rule in rules_by_weekday.get(cursor.weekday(), []):
+                start_date = rule.get('start_date')
+                end_date = rule.get('end_date')
+                if start_date and start_date > day_key:
+                    continue
+                if end_date and end_date < day_key:
+                    continue
+                matching_rules.append(rule)
+
+            day_overrides = overrides_by_date.get(day_key, [])
+            skip_map = {row['rule_id']: row for row in day_overrides if row.get('action') == 'skip' and row.get('rule_id')}
+            replace_map = {row['rule_id']: row for row in day_overrides if row.get('action') == 'replace' and row.get('rule_id')}
+            items = []
+
+            for rule in matching_rules:
+                if rule['id'] in replace_map:
+                    items.append(make_schedule_item(replace_map[rule['id']], cursor, source='override', fallback_rule=rule))
+                elif rule['id'] in skip_map:
+                    items.append(make_schedule_item(skip_map[rule['id']], cursor, source='skip', fallback_rule=rule, skipped=True))
+                else:
+                    items.append(make_schedule_item(rule, cursor, source='rule'))
+
+            for row in day_overrides:
+                if row.get('action') == 'unique' or not row.get('rule_id'):
+                    items.append(make_schedule_item(row, cursor, source='override'))
+
+            items.sort(key=lambda item: (item['is_skipped'], 1 if item['workout_type_id'] else 2, item['title'].lower()))
+            week.append({
+                'date': day_key,
+                'day_number': cursor.day,
+                'is_current_month': cursor.month == month_start.month,
+                'is_today': cursor == date.today(),
+                'session_count': session_counts.get(day_key, 0),
+                'entries': items,
+            })
+            cursor += timedelta(days=1)
+        weeks.append(week)
+
+    return {
+        'selected_month': month_start.strftime('%Y-%m'),
+        'month_label': month_start.strftime('%B %Y'),
+        'prev_month': add_months(month_start, -1).strftime('%Y-%m'),
+        'next_month': add_months(month_start, 1).strftime('%Y-%m'),
+        'weekday_labels': WEEKDAY_LABELS,
+        'schedule_rules': rules,
+        'calendar_weeks': weeks,
+    }
+
+def expand_recurring_occurrences(start_date, end_date, recurring_rows):
+    month_map = defaultdict(lambda: {'income': 0.0, 'expense': 0.0, 'items': []})
+    for row in recurring_rows:
+        if not row['is_active']:
+            continue
+        next_due = date.fromisoformat(row['next_due_date']) if row['next_due_date'] else None
+        if not next_due:
+            continue
+        row_end = date.fromisoformat(row['end_date']) if row['end_date'] else None
+        cursor = next_due
+        while cursor <= end_date:
+            if cursor >= start_date and (row_end is None or cursor <= row_end):
+                month_key = cursor.strftime('%Y-%m')
+                amount = float(row['amount'] or 0)
+                month_map[month_key][row['type']] += amount
+                month_map[month_key]['items'].append({
+                    'name': row['name'],
+                    'type': row['type'],
+                    'amount': amount,
+                    'date': cursor.isoformat(),
+                    'cadence': row['cadence'],
+                })
+            if row['cadence'] == 'weekly':
+                cursor += timedelta(days=7)
+            elif row['cadence'] == 'yearly':
+                cursor = add_months(cursor, 12)
+            else:
+                cursor = add_months(cursor, 1)
+            if row_end and cursor > row_end:
+                break
+    return month_map
+
+def build_financial_payload(conn, history_days, edit_txn_id=None):
+    cutoff_date = (date.today() - timedelta(days=history_days - 1)).isoformat()
+    txns = conn.execute('''
+        SELECT t.*, fc.name as cat_name, fc.type as cat_type, fa.name as account_name, fa.account_type
+        FROM transactions t
+        LEFT JOIN financial_categories fc ON t.category_id=fc.id
+        LEFT JOIN financial_accounts fa ON t.account_id=fa.id
+        WHERE t.transaction_date>=?
+        ORDER BY t.transaction_date DESC, t.id DESC
+    ''', (cutoff_date,)).fetchall()
+    chart_txns = conn.execute('''
+        SELECT t.*, fc.name as cat_name, fc.type as cat_type, fa.name as account_name, fa.account_type
+        FROM transactions t
+        LEFT JOIN financial_categories fc ON t.category_id=fc.id
+        LEFT JOIN financial_accounts fa ON t.account_id=fa.id
+        WHERE t.transaction_date>=?
+        ORDER BY t.transaction_date ASC, t.id ASC
+    ''', (cutoff_date,)).fetchall()
+    cats = conn.execute('SELECT * FROM financial_categories ORDER BY type, name').fetchall()
+    accounts = conn.execute('SELECT * FROM financial_accounts WHERE is_active=1 ORDER BY account_type, name').fetchall()
+    goals = conn.execute('SELECT * FROM savings_goals ORDER BY is_completed, created_at DESC').fetchall()
+    expected = conn.execute('SELECT * FROM expected_cash ORDER BY is_received, expected_date, created_at DESC').fetchall()
+    recurring = conn.execute('''
+        SELECT rp.*, fc.name as cat_name, fa.name as account_name
+        FROM recurring_payments rp
+        LEFT JOIN financial_categories fc ON rp.category_id=fc.id
+        LEFT JOIN financial_accounts fa ON rp.account_id=fa.id
+        ORDER BY rp.next_due_date, rp.name
+    ''').fetchall()
+    budgets = conn.execute('''
+        SELECT fb.*, fc.name as cat_name
+        FROM finance_budgets fb
+        LEFT JOIN financial_categories fc ON fb.category_id=fc.id
+        ORDER BY fb.is_fixed DESC, fb.label
+    ''').fetchall()
+    edit_txn = conn.execute('SELECT * FROM transactions WHERE id=?', (edit_txn_id,)).fetchone() if edit_txn_id else None
+    currency_setting = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key='currency_symbol'").fetchone()
+    projection_setting = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key='finance_projection_months'").fetchone()
+    projection_months = int(projection_setting['setting_value']) if projection_setting and str(projection_setting['setting_value']).isdigit() else 6
+
+    income_total = sum(float(t['amount'] or 0) for t in txns if t['type'] == 'income')
+    expense_total = sum(float(t['amount'] or 0) for t in txns if t['type'] == 'expense')
+    actual_balance = income_total - expense_total
+    liquid_balance = sum(float(a['current_balance'] or 0) for a in accounts)
+
+    category_spend = defaultdict(float)
+    monthly_category = defaultdict(lambda: defaultdict(float))
+    transport_spend = defaultdict(float)
+    for row in chart_txns:
+        if row['type'] != 'expense':
+            continue
+        category_name = row['cat_name'] or 'Uncategorized'
+        amount = float(row['amount'] or 0)
+        category_spend[category_name] += amount
+        monthly_category[row['transaction_date'][:7]][category_name] += amount
+        if category_name in {'Transport', 'Commute', 'Octopus Top Up'} or (row['account_name'] or '') == 'Octopus Card':
+            transport_spend[(row['transport_mode'] or 'general').title()] += amount
+
+    budget_total = sum(float(row['monthly_amount'] or 0) for row in budgets)
+    recurring_monthly_income = round(sum(monthlyize_amount(row['amount'], row['cadence']) for row in recurring if row['type'] == 'income' and row['is_active']), 2)
+    recurring_monthly_expense = round(sum(monthlyize_amount(row['amount'], row['cadence']) for row in recurring if row['type'] == 'expense' and row['is_active']), 2)
+    disposable_income = round(recurring_monthly_income - budget_total - recurring_monthly_expense, 2)
+
+    start_month = date.today().replace(day=1)
+    end_month = add_months(start_month, max(projection_months - 1, 0))
+    recurring_month_map = expand_recurring_occurrences(start_month, add_months(end_month, 1) - timedelta(days=1), recurring)
+    expected_month_map = defaultdict(float)
+    for row in expected:
+        if row['is_received']:
+            continue
+        if row['expected_date']:
+            expected_month_map[row['expected_date'][:7]] += float(row['amount'] or 0)
+
+    projected_balance = liquid_balance
+    projection_rows = []
+    for i in range(projection_months):
+        month_date = add_months(start_month, i)
+        key = month_date.strftime('%Y-%m')
+        income_flow = recurring_month_map[key]['income'] + expected_month_map[key]
+        expense_flow = recurring_month_map[key]['expense'] + budget_total
+        projected_balance = round(projected_balance + income_flow - expense_flow, 2)
+        projection_rows.append({
+            'month': key,
+            'income': round(income_flow, 2),
+            'expense': round(expense_flow, 2),
+            'projected_balance': projected_balance,
+        })
+
+    goal_plans = []
+    for goal in goals:
+        remaining = max(0.0, float(goal['target_amount'] or 0) - float(goal['current_amount'] or 0))
+        months_left = None
+        required_monthly = None
+        if goal['deadline']:
+            deadline = date.fromisoformat(goal['deadline'])
+            months_left = max(1, (deadline.year - date.today().year) * 12 + (deadline.month - date.today().month) + (1 if deadline.day >= date.today().day else 0))
+            required_monthly = round(remaining / months_left, 2) if months_left else remaining
+        goal_plans.append({
+            'id': goal['id'],
+            'name': goal['name'],
+            'remaining': round(remaining, 2),
+            'months_left': months_left,
+            'required_monthly': required_monthly,
+        })
+
+    week_start = get_week_start()
+    meal_rows = conn.execute('''
+        SELECT mpe.*, mpd.name as dish_name
+        FROM meal_plan_entries mpe
+        JOIN meal_plan_dishes mpd ON mpd.id = mpe.dish_id
+        WHERE mpe.planned_date BETWEEN ? AND ?
+        ORDER BY mpe.planned_date, CASE mpe.meal_type WHEN 'breakfast' THEN 1 WHEN 'lunch' THEN 2 WHEN 'dinner' THEN 3 ELSE 4 END
+    ''', (week_start.isoformat(), (week_start + timedelta(days=6)).isoformat())).fetchall()
+    weekly_meal_plan_cost = 0.0
+    for row in meal_rows:
+        ingredient_total = conn.execute('SELECT SUM(COALESCE(estimated_cost,0) * COALESCE(?,1)) as total FROM meal_plan_ingredients WHERE dish_id=?', (float(row['servings'] or 1), row['dish_id'])).fetchone()['total'] or 0
+        weekly_meal_plan_cost += float(ingredient_total)
+
+    chart_payload = {
+        'transactions': [dict(t) for t in chart_txns],
+        'category_spend': [{'label': k, 'amount': round(v, 2)} for k, v in sorted(category_spend.items(), key=lambda item: item[1], reverse=True)],
+        'monthly_category': {
+            month: {cat: round(val, 2) for cat, val in data.items()}
+            for month, data in sorted(monthly_category.items())
+        },
+        'transport_spend': [{'label': k, 'amount': round(v, 2)} for k, v in sorted(transport_spend.items(), key=lambda item: item[1], reverse=True)],
+        'projection': projection_rows,
+    }
+
+    insights = []
+    insights.append(f'Budgeted disposable income is {disposable_income:.2f} per month after recurring payments and budgets.')
+    if weekly_meal_plan_cost > 0:
+        insights.append(f'Current weekly meal plan forecasts {weekly_meal_plan_cost:.2f} in food spend.')
+    if goal_plans:
+        nearest = next((g for g in goal_plans if g['required_monthly'] is not None), None)
+        if nearest:
+            insights.append(f'{nearest["name"]} needs {nearest["required_monthly"]:.2f} per month to hit its deadline.')
+
+    return {
+        'transactions': txns,
+        'categories': cats,
+        'accounts': accounts,
+        'income_total': income_total,
+        'expense_total': expense_total,
+        'actual_balance': actual_balance,
+        'liquid_balance': liquid_balance,
+        'savings_goals': goals,
+        'goal_plans': goal_plans,
+        'expected_cash': expected,
+        'recurring_payments': recurring,
+        'budgets': budgets,
+        'budget_total': budget_total,
+        'recurring_monthly_income': recurring_monthly_income,
+        'recurring_monthly_expense': recurring_monthly_expense,
+        'disposable_income': disposable_income,
+        'currency': currency_setting['setting_value'] if currency_setting else '$',
+        'today': date.today().isoformat(),
+        'chart_transactions': [dict(t) for t in chart_txns],
+        'history_days': history_days,
+        'edit_txn': edit_txn,
+        'projection_months': projection_months,
+        'projection_rows': projection_rows,
+        'chart_payload': chart_payload,
+        'weekly_meal_plan_cost': round(weekly_meal_plan_cost, 2),
+        'insights': insights,
+    }
+
+def build_meal_plan_payload(conn, week_start_iso=None):
+    week_start = date.fromisoformat(week_start_iso) if week_start_iso else get_week_start()
+    week_end = week_start + timedelta(days=6)
+    dishes = conn.execute('SELECT * FROM meal_plan_dishes ORDER BY name').fetchall()
+    dish_ids = [row['id'] for row in dishes]
+    ingredients_by_dish = defaultdict(list)
+    if dish_ids:
+        placeholders = ','.join('?' for _ in dish_ids)
+        ingredient_rows = conn.execute(
+            f'SELECT * FROM meal_plan_ingredients WHERE dish_id IN ({placeholders}) ORDER BY ingredient_name',
+            tuple(dish_ids)
+        ).fetchall()
+        for row in ingredient_rows:
+            ingredients_by_dish[row['dish_id']].append(dict(row))
+
+    entry_rows = conn.execute('''
+        SELECT mpe.*, mpd.name as dish_name, mpd.notes as dish_notes
+        FROM meal_plan_entries mpe
+        JOIN meal_plan_dishes mpd ON mpd.id = mpe.dish_id
+        WHERE mpe.planned_date BETWEEN ? AND ?
+        ORDER BY mpe.planned_date, CASE mpe.meal_type WHEN 'breakfast' THEN 1 WHEN 'lunch' THEN 2 WHEN 'dinner' THEN 3 ELSE 4 END, mpe.id
+    ''', (week_start.isoformat(), week_end.isoformat())).fetchall()
+
+    entries = []
+    grocery_map = defaultdict(lambda: {'quantity': 0.0, 'unit': '', 'estimated_cost': 0.0, 'sources': []})
+    weekly_cost = 0.0
+    weekly_calories = 0.0
+    for row in entry_rows:
+        item = dict(row)
+        ingredients = ingredients_by_dish.get(row['dish_id'], [])
+        total_cost = 0.0
+        total_calories = 0.0
+        servings = float(row['servings'] or 1)
+        for ing in ingredients:
+            qty = float(ing['quantity'] or 0) * servings
+            cost = float(ing['estimated_cost'] or 0) * servings
+            calories = float(ing['calories'] or 0) * servings
+            total_cost += cost
+            total_calories += calories
+            if ing.get('add_to_grocery'):
+                bucket = grocery_map[ing['ingredient_name']]
+                bucket['quantity'] += qty
+                bucket['unit'] = ing.get('unit') or bucket['unit']
+                bucket['estimated_cost'] += cost
+                bucket['sources'].append(row['dish_name'])
+        item['ingredients'] = ingredients
+        item['total_cost'] = round(total_cost, 2)
+        item['total_calories'] = round(total_calories, 1)
+        entries.append(item)
+        weekly_cost += total_cost
+        weekly_calories += total_calories
+
+    grocery_items = [
+        {
+            'ingredient_name': name,
+            'quantity': round(data['quantity'], 2),
+            'unit': data['unit'],
+            'estimated_cost': round(data['estimated_cost'], 2),
+            'sources': sorted(set(data['sources'])),
+        }
+        for name, data in sorted(grocery_map.items())
+    ]
+
+    weekdays = []
+    for i in range(7):
+        day = week_start + timedelta(days=i)
+        weekdays.append({'label': day.strftime('%A'), 'date': day.isoformat()})
+
+    return {
+        'week_start': week_start.isoformat(),
+        'week_end': week_end.isoformat(),
+        'weekdays': weekdays,
+        'dishes': [dict(row) for row in dishes],
+        'ingredients_by_dish': dict(ingredients_by_dish),
+        'entries': entries,
+        'grocery_items': grocery_items,
+        'weekly_cost': round(weekly_cost, 2),
+        'weekly_calories': round(weekly_calories, 1),
     }
 
 def calculate_cardio_session_metrics(conn, session_id, session_date, profile=None):
@@ -1599,6 +2228,9 @@ def gym():
     history_days = request.args.get('history_days', default=30, type=int)
     if history_days not in (14, 30, 90, 180):
         history_days = 30
+    selected_month = request.args.get('month')
+    edit_rule_id = request.args.get('edit_rule_id', type=int)
+    edit_override_id = request.args.get('edit_override_id', type=int)
     cutoff_date = (date.today() - timedelta(days=history_days - 1)).isoformat()
     wt = conn.execute('SELECT * FROM workout_types WHERE COALESCE(is_active, 1)=1 ORDER BY id').fetchall()
     recent = conn.execute('SELECT ws.*, wt.name as workout_name, wt.is_cardio FROM workout_sessions ws JOIN workout_types wt ON ws.workout_type_id=wt.id WHERE ws.session_date >= ? ORDER BY ws.session_date DESC LIMIT 50', (cutoff_date,)).fetchall()
@@ -1611,6 +2243,9 @@ def gym():
     steps_entries_count = conn.execute('SELECT COUNT(*) as c FROM daily_steps').fetchone()['c']
     edit_weight = conn.execute('SELECT * FROM body_stats WHERE id=?', (edit_weight_id,)).fetchone() if edit_weight_id else None
     edit_steps = conn.execute('SELECT * FROM daily_steps WHERE id=?', (edit_steps_id,)).fetchone() if edit_steps_id else None
+    edit_schedule_rule = conn.execute('SELECT * FROM workout_schedule_rules WHERE id=?', (edit_rule_id,)).fetchone() if edit_rule_id else None
+    edit_schedule_override = conn.execute('SELECT * FROM workout_schedule_overrides WHERE id=?', (edit_override_id,)).fetchone() if edit_override_id else None
+    schedule_payload = build_gym_schedule_payload(conn, selected_month)
     conn.close()
     return render_template('gym.html',
         workout_types=wt,
@@ -1622,13 +2257,157 @@ def gym():
         today=date.today().isoformat(),
         edit_weight=edit_weight,
         edit_steps=edit_steps,
-        history_days=history_days)
+        edit_schedule_rule=dict(edit_schedule_rule) if edit_schedule_rule else None,
+        edit_schedule_override=dict(edit_schedule_override) if edit_schedule_override else None,
+        history_days=history_days,
+        **schedule_payload)
+
+@app.route('/gym/schedule/rule/save', methods=['POST'])
+def gym_schedule_rule_save():
+    d = request.form
+    month = d.get('month') or date.today().strftime('%Y-%m')
+    try:
+        weekday = int(d.get('weekday') or 0)
+    except ValueError:
+        weekday = -1
+    if weekday not in range(7):
+        flash('Choose a valid weekday for the recurring workout.', 'error')
+        return redirect(url_for('gym', month=month))
+
+    workout_type_id = d.get('workout_type_id') or None
+    title = (d.get('title') or '').strip() or None
+    if not workout_type_id and not title:
+        flash('Choose a workout type or enter a custom title.', 'error')
+        return redirect(url_for('gym', month=month))
+
+    start_date = d.get('start_date') or None
+    end_date = d.get('end_date') or None
+    if start_date and end_date and end_date < start_date:
+        flash('Recurring plan end date must be on or after the start date.', 'error')
+        return redirect(url_for('gym', month=month))
+
+    conn = get_db()
+    if d.get('rule_id'):
+        conn.execute('''
+            UPDATE workout_schedule_rules
+            SET workout_type_id=?, weekday=?, title=?, notes=?, start_date=?, end_date=?, is_active=1
+            WHERE id=?
+        ''', (workout_type_id, weekday, title, d.get('notes') or None, start_date, end_date, d['rule_id']))
+        flash('Recurring workout updated.', 'success')
+    else:
+        conn.execute('''
+            INSERT INTO workout_schedule_rules (workout_type_id, weekday, title, notes, start_date, end_date)
+            VALUES (?,?,?,?,?,?)
+        ''', (workout_type_id, weekday, title, d.get('notes') or None, start_date, end_date))
+        flash('Recurring workout added to the calendar.', 'success')
+    conn.commit()
+    conn.close()
+    return redirect(url_for('gym', month=month))
+
+@app.route('/gym/schedule/rule/delete/<int:rule_id>', methods=['POST'])
+def gym_schedule_rule_delete(rule_id):
+    month = request.form.get('month') or date.today().strftime('%Y-%m')
+    conn = get_db()
+    conn.execute('UPDATE workout_schedule_rules SET is_active=0 WHERE id=?', (rule_id,))
+    conn.commit()
+    conn.close()
+    flash('Recurring workout removed from the calendar.', 'success')
+    return redirect(url_for('gym', month=month))
+
+@app.route('/gym/schedule/override/save', methods=['POST'])
+def gym_schedule_override_save():
+    d = request.form
+    month = d.get('month') or date.today().strftime('%Y-%m')
+    override_date = d.get('override_date') or None
+    action = (d.get('action') or 'unique').strip().lower()
+    if action not in {'skip', 'replace', 'unique'}:
+        flash('Choose a valid day override action.', 'error')
+        return redirect(url_for('gym', month=month))
+    if not override_date:
+        flash('Choose the date you want to change.', 'error')
+        return redirect(url_for('gym', month=month))
+
+    rule_id = d.get('rule_id') or None
+    workout_type_id = d.get('workout_type_id') or None
+    title = (d.get('title') or '').strip() or None
+    if action in {'skip', 'replace'} and not rule_id:
+        flash('Choose which recurring workout this day override belongs to.', 'error')
+        return redirect(url_for('gym', month=month))
+    if action != 'skip' and not workout_type_id and not title:
+        flash('Choose a workout type or enter a custom title for the day.', 'error')
+        return redirect(url_for('gym', month=month))
+
+    conn = get_db()
+    if d.get('override_id'):
+        conn.execute('''
+            UPDATE workout_schedule_overrides
+            SET rule_id=?, override_date=?, action=?, workout_type_id=?, title=?, notes=?
+            WHERE id=?
+        ''', (
+            rule_id,
+            override_date,
+            action,
+            workout_type_id if action != 'skip' else None,
+            title if action != 'skip' else None,
+            d.get('notes') or None,
+            d['override_id'],
+        ))
+        flash('Day-specific workout updated.', 'success')
+    else:
+        conn.execute('''
+            INSERT INTO workout_schedule_overrides (rule_id, override_date, action, workout_type_id, title, notes)
+            VALUES (?,?,?,?,?,?)
+        ''', (
+            rule_id,
+            override_date,
+            action,
+            workout_type_id if action != 'skip' else None,
+            title if action != 'skip' else None,
+            d.get('notes') or None,
+        ))
+        flash('Day-specific workout saved.', 'success')
+    conn.commit()
+    conn.close()
+    return redirect(url_for('gym', month=month))
+
+@app.route('/gym/schedule/override/delete/<int:override_id>', methods=['POST'])
+def gym_schedule_override_delete(override_id):
+    month = request.form.get('month') or date.today().strftime('%Y-%m')
+    conn = get_db()
+    conn.execute('DELETE FROM workout_schedule_overrides WHERE id=?', (override_id,))
+    conn.commit()
+    conn.close()
+    flash('Day override removed.', 'success')
+    return redirect(url_for('gym', month=month))
+
+@app.route('/gym/schedule/skip/<int:rule_id>', methods=['POST'])
+def gym_schedule_skip(rule_id):
+    override_date = request.form.get('override_date') or date.today().isoformat()
+    month = request.form.get('month') or override_date[:7]
+    conn = get_db()
+    existing = conn.execute('''
+        SELECT id FROM workout_schedule_overrides
+        WHERE rule_id=? AND override_date=? AND action='skip'
+    ''', (rule_id, override_date)).fetchone()
+    if not existing:
+        conn.execute('''
+            INSERT INTO workout_schedule_overrides (rule_id, override_date, action, notes)
+            VALUES (?,?,'skip',?)
+        ''', (rule_id, override_date, 'Skipped from calendar view'))
+        flash('That scheduled workout is now skipped for the selected day.', 'success')
+    else:
+        flash('That day is already marked as skipped.', 'success')
+    conn.commit()
+    conn.close()
+    return redirect(url_for('gym', month=month))
 
 @app.route('/gym/progress')
 def gym_progress():
     conn = get_db()
     payload = build_gym_progress_payload(conn)
     measurements_payload = build_body_measurements_payload(conn)
+    inbody_payload = build_inbody_payload(conn)
+    vo2_payload = build_vo2_payload(conn)
     body = conn.execute('SELECT * FROM body_stats ORDER BY log_date DESC LIMIT 60').fetchall()
     steps = conn.execute('SELECT * FROM daily_steps ORDER BY log_date DESC LIMIT 180').fetchall()
     conn.close()
@@ -1642,6 +2421,8 @@ def gym_progress():
         cardio_calories_trend=payload['cardio_calories_trend'],
         strength_standards=payload['strength_standards'],
         body_measurements=measurements_payload,
+        inbody=inbody_payload,
+        vo2=vo2_payload,
         body_stats=body,
         step_logs=[dict(row) for row in steps])
 
@@ -1662,6 +2443,120 @@ def gym_measurements_save():
     conn.commit()
     conn.close()
     flash('Body measurements saved.', 'success')
+    return redirect(url_for('gym_progress'))
+
+@app.route('/gym/inbody/save', methods=['POST'])
+def gym_inbody_save():
+    d = request.form
+    test_datetime = (d.get('test_datetime') or '').strip() or datetime.now().strftime('%Y-%m-%d %H:%M')
+
+    segmental_lean = [
+        {'label': 'Right Arm', 'kg': _safe_float(d.get('lean_right_arm_kg')), 'pct': _safe_float(d.get('lean_right_arm_pct'))},
+        {'label': 'Left Arm', 'kg': _safe_float(d.get('lean_left_arm_kg')), 'pct': _safe_float(d.get('lean_left_arm_pct'))},
+        {'label': 'Trunk', 'kg': _safe_float(d.get('lean_trunk_kg')), 'pct': _safe_float(d.get('lean_trunk_pct'))},
+        {'label': 'Right Leg', 'kg': _safe_float(d.get('lean_right_leg_kg')), 'pct': _safe_float(d.get('lean_right_leg_pct'))},
+        {'label': 'Left Leg', 'kg': _safe_float(d.get('lean_left_leg_kg')), 'pct': _safe_float(d.get('lean_left_leg_pct'))},
+    ]
+    segmental_fat = [
+        {'label': 'Right Arm', 'kg': _safe_float(d.get('fat_right_arm_kg')), 'pct': _safe_float(d.get('fat_right_arm_pct'))},
+        {'label': 'Left Arm', 'kg': _safe_float(d.get('fat_left_arm_kg')), 'pct': _safe_float(d.get('fat_left_arm_pct'))},
+        {'label': 'Trunk', 'kg': _safe_float(d.get('fat_trunk_kg')), 'pct': _safe_float(d.get('fat_trunk_pct'))},
+        {'label': 'Right Leg', 'kg': _safe_float(d.get('fat_right_leg_kg')), 'pct': _safe_float(d.get('fat_right_leg_pct'))},
+        {'label': 'Left Leg', 'kg': _safe_float(d.get('fat_left_leg_kg')), 'pct': _safe_float(d.get('fat_left_leg_pct'))},
+    ]
+    impedance = {
+        '20khz': {'ra': _safe_float(d.get('imp_20_ra')), 'la': _safe_float(d.get('imp_20_la')), 'tr': _safe_float(d.get('imp_20_tr')), 'rl': _safe_float(d.get('imp_20_rl')), 'll': _safe_float(d.get('imp_20_ll'))},
+        '100khz': {'ra': _safe_float(d.get('imp_100_ra')), 'la': _safe_float(d.get('imp_100_la')), 'tr': _safe_float(d.get('imp_100_tr')), 'rl': _safe_float(d.get('imp_100_rl')), 'll': _safe_float(d.get('imp_100_ll'))},
+    }
+
+    height_cm = _safe_float(d.get('height_cm'))
+    weight_kg = _safe_float(d.get('weight_kg'))
+    body_fat_mass = _safe_float(d.get('body_fat_mass_kg'))
+    bmi = _safe_float(d.get('bmi'))
+    if bmi is None and height_cm and weight_kg and height_cm > 0:
+        bmi = round(weight_kg / ((height_cm / 100) ** 2), 1)
+
+    pbf = _safe_float(d.get('pbf'))
+    if pbf is None and body_fat_mass is not None and weight_kg and weight_kg > 0:
+        pbf = round((body_fat_mass / weight_kg) * 100, 1)
+
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO inbody_scans (
+            test_datetime, height_cm, age, gender, weight_kg, total_body_water_l, protein_kg, minerals_kg,
+            body_fat_mass_kg, smm_kg, bmi, pbf, inbody_score, bmr, whr, visceral_fat_level, obesity_degree,
+            target_weight_kg, weight_control_kg, fat_control_kg, muscle_control_kg,
+            segmental_lean_json, segmental_fat_json, impedance_json, source_label, notes
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ''', (
+        test_datetime,
+        height_cm,
+        _safe_int(d.get('age')),
+        (d.get('gender') or 'male').strip().lower(),
+        weight_kg,
+        _safe_float(d.get('total_body_water_l')),
+        _safe_float(d.get('protein_kg')),
+        _safe_float(d.get('minerals_kg')),
+        body_fat_mass,
+        _safe_float(d.get('smm_kg')),
+        bmi,
+        pbf,
+        _safe_float(d.get('inbody_score')),
+        _safe_float(d.get('bmr')),
+        _safe_float(d.get('whr')),
+        _safe_float(d.get('visceral_fat_level')),
+        _safe_float(d.get('obesity_degree')),
+        _safe_float(d.get('target_weight_kg')),
+        _safe_float(d.get('weight_control_kg')),
+        _safe_float(d.get('fat_control_kg')),
+        _safe_float(d.get('muscle_control_kg')),
+        json.dumps(segmental_lean),
+        json.dumps(segmental_fat),
+        json.dumps(impedance),
+        d.get('source_label') or 'InBody120',
+        d.get('notes') or None,
+    ))
+    conn.commit()
+    conn.close()
+    flash('InBody scan saved and computed metrics updated.', 'success')
+    return redirect(url_for('gym_progress'))
+
+@app.route('/gym/vo2/save', methods=['POST'])
+def gym_vo2_save():
+    d = request.form
+    method = (d.get('method') or '').strip().lower()
+    if method not in {'cooper', 'beep', 'rockport'}:
+        flash('Invalid VO2 test method.', 'error')
+        return redirect(url_for('gym_progress'))
+
+    vo2_max = calculate_vo2_max(method, d)
+    if vo2_max is None:
+        flash('Could not compute VO2 max. Please complete required inputs for the selected method.', 'error')
+        return redirect(url_for('gym_progress'))
+
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO vo2_tests (
+            test_date, method, vo2_max, distance_m, beep_level, beep_shuttles,
+            weight_kg, age, heart_rate, time_minutes, sex, notes
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ''', (
+        d.get('test_date') or date.today().isoformat(),
+        method,
+        vo2_max,
+        _safe_float(d.get('distance_m')),
+        _safe_float(d.get('beep_level')),
+        _safe_int(d.get('beep_shuttles')),
+        _safe_float(d.get('weight_kg')),
+        _safe_int(d.get('age')),
+        _safe_int(d.get('heart_rate')),
+        _safe_float(d.get('time_minutes')),
+        (d.get('sex') or 'male').strip().lower(),
+        d.get('notes') or None,
+    ))
+    conn.commit()
+    conn.close()
+    flash(f'VO2 max logged: {vo2_max:.2f}', 'success')
     return redirect(url_for('gym_progress'))
 
 @app.route('/gym/session/<int:session_id>')
@@ -1901,10 +2796,21 @@ def gym_session_new(wt_id):
         conn.close()
         flash('Workout type not found.', 'error')
         return redirect(url_for('gym'))
+    selected_date = request.args.get('session_date') or date.today().isoformat()
+    try:
+        selected_date = datetime.strptime(selected_date, '%Y-%m-%d').date().isoformat()
+    except ValueError:
+        selected_date = date.today().isoformat()
+
     exercises = conn.execute('SELECT * FROM exercises WHERE workout_type_id=? AND is_active=1 ORDER BY order_index', (wt_id,)).fetchall()
     if wt and wt['is_cardio'] and not exercises:
+        default_name = 'Treadmill'
+        if wt['name'] == 'Swimming':
+            default_name = 'Swim'
+        elif wt['name'] == 'Fitness Test':
+            default_name = 'Test Result'
         conn.execute('INSERT INTO exercises (name,workout_type_id,is_cardio,order_index,is_active) VALUES (?,?,?,?,1)',
-            ('Treadmill', wt_id, 1, 1))
+            (default_name, wt_id, 1, 1))
         conn.commit()
         exercises = conn.execute('SELECT * FROM exercises WHERE workout_type_id=? AND is_active=1 ORDER BY order_index', (wt_id,)).fetchall()
     stretches = conn.execute('SELECT * FROM workout_stretches WHERE workout_type_id=? AND is_active=1 ORDER BY order_index, name', (wt_id,)).fetchall()
@@ -1963,7 +2869,7 @@ def gym_session_new(wt_id):
                     'workout_name': latest_row['workout_name']
                 }
     conn.close()
-    return render_template('gym_session.html', workout_type=wt, exercises=exercises, today=date.today().isoformat(),
+    return render_template('gym_session.html', workout_type=wt, exercises=exercises, today=selected_date,
         profile=profile, latest_weight=latest_weight, stretches=stretches, last_performance=last_performance)
 
 @app.route('/gym/session/save', methods=['POST'])
@@ -1974,6 +2880,8 @@ def gym_session_save():
     workout_type = conn.execute('SELECT * FROM workout_types WHERE id=?', (d['workout_type_id'],)).fetchone()
     is_outdoor_run = workout_type and workout_type['name'] == 'Outdoor Run'
     is_hiit_cardio = workout_type and workout_type['name'] == 'HIIT Cardio'
+    is_swimming = workout_type and workout_type['name'] == 'Swimming'
+    is_fitness_test = workout_type and workout_type['name'] == 'Fitness Test'
     profile = conn.execute('SELECT * FROM user_profile WHERE id=1').fetchone()
     latest_weight = conn.execute('SELECT weight_kg FROM body_stats ORDER BY log_date DESC, id DESC LIMIT 1').fetchone()
     current_weight = latest_weight['weight_kg'] if latest_weight else None
@@ -2023,6 +2931,113 @@ def gym_session_save():
                 total_cardio_seconds += sprint_seconds + rest_seconds
                 if current_weight and (sprint_seconds > 0 or rest_seconds > 0):
                     total_calories += estimate_hiit_interval_calories(current_weight, sprint_seconds, rest_seconds)
+    elif is_swimming:
+        exercise_ids = request.form.getlist('exercise_id')
+        for eid in exercise_ids[:1]:
+            swim_min = _safe_int(d.get(f'swim_min_{eid}')) or 0
+            swim_sec = _safe_int(d.get(f'swim_sec_{eid}')) or 0
+            elapsed_seconds = max((swim_min * 60) + swim_sec, 0)
+            distance_m = _safe_float(d.get(f'distance_m_{eid}'))
+            laps = _safe_int(d.get(f'swim_laps_{eid}'))
+            stroke = (d.get(f'swim_stroke_{eid}') or '').strip()
+            swim_notes = []
+            if stroke:
+                swim_notes.append(stroke)
+            if laps:
+                swim_notes.append(f'{laps} laps')
+            conn.execute('''
+                INSERT INTO workout_exercise_logs (
+                    session_id, exercise_id, set_number, set_type, time_seconds, distance_km, notes
+                ) VALUES (?,?,?,?,?,?,?)
+            ''', (
+                sid,
+                eid,
+                1,
+                'interval',
+                elapsed_seconds if elapsed_seconds else None,
+                round(distance_m / 1000, 4) if distance_m else None,
+                ' · '.join(swim_notes) if swim_notes else None,
+            ))
+            if elapsed_seconds:
+                total_cardio_seconds += elapsed_seconds
+                if current_weight:
+                    total_calories += estimate_met_calories(current_weight, 8.3, elapsed_seconds / 60)
+    elif is_fitness_test:
+        exercise_ids = request.form.getlist('exercise_id')
+        test_name = (d.get('fitness_test_name') or 'Custom Test').strip()
+        distance_m = _safe_float(d.get('fitness_distance_m'))
+        beep_level = _safe_float(d.get('fitness_beep_level'))
+        beep_shuttles = _safe_int(d.get('fitness_beep_shuttles'))
+        elapsed_minutes = _safe_float(d.get('fitness_time_minutes'))
+        result_notes = (d.get('fitness_result_notes') or '').strip()
+        if test_name == 'Cooper 12-Min' and elapsed_minutes is None:
+            elapsed_minutes = 12
+        elapsed_seconds = int(round(elapsed_minutes * 60)) if elapsed_minutes else None
+
+        summary_parts = [test_name]
+        if distance_m is not None:
+            summary_parts.append(f'{distance_m:g} m')
+        if beep_level is not None:
+            summary_parts.append(f'Level {beep_level:g}')
+        if beep_shuttles is not None:
+            summary_parts.append(f'{beep_shuttles} shuttles')
+        if elapsed_minutes is not None:
+            summary_parts.append(f'{elapsed_minutes:g} min')
+        if result_notes:
+            summary_parts.append(result_notes)
+
+        if exercise_ids:
+            conn.execute('''
+                INSERT INTO workout_exercise_logs (
+                    session_id, exercise_id, set_number, set_type, time_seconds, distance_km, notes
+                ) VALUES (?,?,?,?,?,?,?)
+            ''', (
+                sid,
+                exercise_ids[0],
+                1,
+                'interval',
+                elapsed_seconds,
+                round(distance_m / 1000, 4) if distance_m else None,
+                ' | '.join(summary_parts),
+            ))
+
+        if elapsed_seconds:
+            total_cardio_seconds += elapsed_seconds
+
+        vo2_method = None
+        if test_name in {'Beep Test', 'Pacer Test'} and beep_level is not None:
+            vo2_method = 'beep'
+        elif test_name == 'Cooper 12-Min' and distance_m is not None:
+            vo2_method = 'cooper'
+
+        if vo2_method:
+            vo2_max = calculate_vo2_max(vo2_method, {
+                'distance_m': distance_m,
+                'beep_level': beep_level,
+                'beep_shuttles': beep_shuttles,
+            })
+            if vo2_max is not None:
+                conn.execute('''
+                    INSERT INTO vo2_tests (
+                        test_date, method, vo2_max, distance_m, beep_level, beep_shuttles, notes
+                    ) VALUES (?,?,?,?,?,?,?)
+                ''', (
+                    d['session_date'],
+                    vo2_method,
+                    vo2_max,
+                    distance_m,
+                    beep_level,
+                    beep_shuttles,
+                    f'Auto-logged from Fitness Test session: {test_name}',
+                ))
+                summary_parts.append(f'VO2 {vo2_max:.2f}')
+
+        summary_text = 'Test summary: ' + ' | '.join(summary_parts)
+        existing_notes = (d.get('notes') or '').strip()
+        conn.execute('UPDATE workout_sessions SET notes=? WHERE id=?', (
+            f'{existing_notes}\n{summary_text}'.strip() if existing_notes else summary_text,
+            sid,
+        ))
     else:
         exercise_ids = request.form.getlist('exercise_id')
         for eid in exercise_ids:
@@ -2188,32 +3203,23 @@ def financial():
     history_days = request.args.get('history_days', default=30, type=int)
     if history_days not in (14, 30, 90, 180, 365):
         history_days = 30
-    cutoff_date = (date.today() - timedelta(days=history_days - 1)).isoformat()
     edit_txn_id = request.args.get('edit_txn_id', type=int)
-    txns = conn.execute('SELECT t.*, fc.name as cat_name, fc.type as cat_type FROM transactions t LEFT JOIN financial_categories fc ON t.category_id=fc.id WHERE t.transaction_date>=? ORDER BY t.transaction_date DESC, t.id DESC', (cutoff_date,)).fetchall()
-    chart_txns = conn.execute('SELECT t.*, fc.name as cat_name, fc.type as cat_type FROM transactions t LEFT JOIN financial_categories fc ON t.category_id=fc.id WHERE t.transaction_date>=? ORDER BY t.transaction_date ASC, t.id ASC', (cutoff_date,)).fetchall()
-    inc = sum(t['amount'] for t in txns if t['type']=='income')
-    exp = sum(t['amount'] for t in txns if t['type']=='expense')
-    cats = conn.execute('SELECT * FROM financial_categories ORDER BY type, name').fetchall()
-    goals = conn.execute('SELECT * FROM savings_goals ORDER BY is_completed, created_at DESC').fetchall()
-    expected = conn.execute('SELECT * FROM expected_cash ORDER BY is_received, expected_date, created_at DESC').fetchall()
-    edit_txn = conn.execute('SELECT * FROM transactions WHERE id=?', (edit_txn_id,)).fetchone() if edit_txn_id else None
-    currency_setting = conn.execute("SELECT setting_value FROM app_settings WHERE setting_key='currency_symbol'").fetchone()
+    payload = build_financial_payload(conn, history_days, edit_txn_id=edit_txn_id)
     conn.close()
-    return render_template('financial.html', transactions=txns, categories=cats, income_total=inc, expense_total=exp,
-        savings_goals=goals, expected_cash=expected, currency=(currency_setting['setting_value'] if currency_setting else '$'),
-        today=date.today().isoformat(), chart_transactions=[dict(t) for t in chart_txns], history_days=history_days, edit_txn=edit_txn)
+    return render_template('financial.html', **payload)
 
 @app.route('/financial/add', methods=['POST'])
 def financial_add():
     d = request.form
     conn = get_db()
     if d.get('transaction_id'):
-        conn.execute('UPDATE transactions SET transaction_date=?, type=?, category_id=?, amount=?, description=?, notes=? WHERE id=?',
-            (d.get('transaction_date') or date.today().isoformat(), d['type'], d.get('category_id') or None, d['amount'], d['description'], d.get('notes'), d['transaction_id']))
+        conn.execute('UPDATE transactions SET transaction_date=?, type=?, category_id=?, account_id=?, transport_mode=?, amount=?, description=?, notes=? WHERE id=?',
+            (d.get('transaction_date') or date.today().isoformat(), d['type'], d.get('category_id') or None, d.get('account_id') or None,
+             d.get('transport_mode') or 'general', d['amount'], d['description'], d.get('notes'), d['transaction_id']))
     else:
-        conn.execute('INSERT INTO transactions (transaction_date,type,category_id,amount,description,notes) VALUES (?,?,?,?,?,?)',
-            (d.get('transaction_date') or date.today().isoformat(), d['type'], d.get('category_id') or None, d['amount'], d['description'], d.get('notes')))
+        conn.execute('INSERT INTO transactions (transaction_date,type,category_id,account_id,transport_mode,amount,description,notes) VALUES (?,?,?,?,?,?,?,?)',
+            (d.get('transaction_date') or date.today().isoformat(), d['type'], d.get('category_id') or None, d.get('account_id') or None,
+             d.get('transport_mode') or 'general', d['amount'], d['description'], d.get('notes')))
     conn.commit()
     conn.close()
     return redirect(url_for('financial'))
@@ -2267,6 +3273,71 @@ def financial_savings_contribute(gid):
         new_amount = float(goal['current_amount'] or 0) + amount
         conn.execute('UPDATE savings_goals SET current_amount=?, is_completed=? WHERE id=?',
             (new_amount, 1 if new_amount >= goal['target_amount'] else 0, gid))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('financial'))
+
+@app.route('/financial/account/save', methods=['POST'])
+def financial_account_save():
+    conn = get_db()
+    account_rows = conn.execute('SELECT id FROM financial_accounts WHERE is_active=1').fetchall()
+    for row in account_rows:
+        value = request.form.get(f'account_balance_{row["id"]}')
+        if value in (None, ''):
+            continue
+        conn.execute('UPDATE financial_accounts SET current_balance=? WHERE id=?', (float(value), row['id']))
+
+    projection_months = request.form.get('finance_projection_months')
+    if projection_months and str(projection_months).isdigit():
+        conn.execute('INSERT OR REPLACE INTO app_settings (setting_key, setting_value) VALUES (?, ?)', ('finance_projection_months', str(int(projection_months))))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('financial'))
+
+@app.route('/financial/recurring/add', methods=['POST'])
+def financial_recurring_add():
+    d = request.form
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO recurring_payments (name, type, category_id, account_id, amount, cadence, next_due_date, end_date, auto_add, notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    ''', (
+        d['name'],
+        d['type'],
+        d.get('category_id') or None,
+        d.get('account_id') or None,
+        float(d.get('amount') or 0),
+        d.get('cadence') or 'monthly',
+        d.get('next_due_date') or date.today().isoformat(),
+        d.get('end_date') or None,
+        1 if d.get('auto_add') else 0,
+        d.get('notes') or None,
+    ))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('financial'))
+
+@app.route('/financial/recurring/toggle/<int:rid>', methods=['POST'])
+def financial_recurring_toggle(rid):
+    conn = get_db()
+    row = conn.execute('SELECT is_active FROM recurring_payments WHERE id=?', (rid,)).fetchone()
+    if row:
+        conn.execute('UPDATE recurring_payments SET is_active=? WHERE id=?', (0 if row['is_active'] else 1, rid))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('financial'))
+
+@app.route('/financial/budget/add', methods=['POST'])
+def financial_budget_add():
+    d = request.form
+    conn = get_db()
+    conn.execute('INSERT INTO finance_budgets (category_id, label, monthly_amount, is_fixed, notes) VALUES (?,?,?,?,?)', (
+        d.get('category_id') or None,
+        d.get('label') or 'Budget',
+        float(d.get('monthly_amount') or 0),
+        1 if d.get('is_fixed') else 0,
+        d.get('notes') or None,
+    ))
     conn.commit()
     conn.close()
     return redirect(url_for('financial'))
@@ -2394,6 +3465,148 @@ def diet_settings_save():
     conn.close()
     return redirect(url_for('diet', date=d.get('selected_date') or date.today().isoformat()))
 
+# ===== MEAL PLAN =====
+@app.route('/meal-plan')
+def meal_plan():
+    conn = get_db()
+    week_start = request.args.get('week_start') or get_week_start().isoformat()
+    payload = build_meal_plan_payload(conn, week_start)
+    conn.close()
+    return render_template('meal_plan.html', today=date.today().isoformat(), **payload)
+
+@app.route('/meal-plan/dish/add', methods=['POST'])
+def meal_plan_dish_add():
+    d = request.form
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute('INSERT INTO meal_plan_dishes (name, meal_type, notes) VALUES (?,?,?)', (
+        d.get('name'),
+        d.get('meal_type') or 'dinner',
+        d.get('notes') or None,
+    ))
+    dish_id = cur.lastrowid
+
+    ingredient_names = request.form.getlist('ingredient_name[]')
+    quantities = request.form.getlist('ingredient_quantity[]')
+    units = request.form.getlist('ingredient_unit[]')
+    costs = request.form.getlist('ingredient_cost[]')
+    calories = request.form.getlist('ingredient_calories[]')
+    grocery_flags = request.form.getlist('ingredient_grocery[]')
+    for idx, name in enumerate(ingredient_names):
+        if not (name or '').strip():
+            continue
+        conn.execute('''
+            INSERT INTO meal_plan_ingredients (dish_id, ingredient_name, quantity, unit, estimated_cost, calories, add_to_grocery)
+            VALUES (?,?,?,?,?,?,?)
+        ''', (
+            dish_id,
+            name.strip(),
+            float(quantities[idx]) if idx < len(quantities) and quantities[idx] else None,
+            units[idx].strip() if idx < len(units) and units[idx] else None,
+            float(costs[idx]) if idx < len(costs) and costs[idx] else 0,
+            float(calories[idx]) if idx < len(calories) and calories[idx] else 0,
+            1 if str(idx) in grocery_flags else 0,
+        ))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('meal_plan'))
+
+@app.route('/meal-plan/entry/add', methods=['POST'])
+def meal_plan_entry_add():
+    d = request.form
+    conn = get_db()
+    conn.execute('''
+        INSERT INTO meal_plan_entries (planned_date, dish_id, meal_type, servings, notes)
+        VALUES (?,?,?,?,?)
+    ''', (
+        d.get('planned_date') or date.today().isoformat(),
+        int(d.get('dish_id')),
+        d.get('meal_type') or 'dinner',
+        float(d.get('servings') or 1),
+        d.get('notes') or None,
+    ))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('meal_plan', week_start=d.get('week_start') or get_week_start().isoformat()))
+
+@app.route('/meal-plan/entry/toggle/<int:entry_id>', methods=['POST'])
+def meal_plan_entry_toggle(entry_id):
+    conn = get_db()
+    row = conn.execute('SELECT is_eaten FROM meal_plan_entries WHERE id=?', (entry_id,)).fetchone()
+    if row:
+        conn.execute('UPDATE meal_plan_entries SET is_eaten=? WHERE id=?', (0 if row['is_eaten'] else 1, entry_id))
+        conn.commit()
+    conn.close()
+    return redirect(url_for('meal_plan', week_start=request.form.get('week_start') or get_week_start().isoformat()))
+
+@app.route('/meal-plan/entry/eat/<int:entry_id>', methods=['POST'])
+def meal_plan_entry_eat(entry_id):
+    conn = get_db()
+    entry = conn.execute('''
+        SELECT mpe.*, mpd.name as dish_name
+        FROM meal_plan_entries mpe
+        JOIN meal_plan_dishes mpd ON mpd.id = mpe.dish_id
+        WHERE mpe.id=?
+    ''', (entry_id,)).fetchone()
+    if not entry:
+        conn.close()
+        flash('Meal plan entry not found.', 'error')
+        return redirect(url_for('meal_plan'))
+
+    ingredients = conn.execute('SELECT * FROM meal_plan_ingredients WHERE dish_id=?', (entry['dish_id'],)).fetchall()
+    servings = float(entry['servings'] or 1)
+    total_calories = sum(float(row['calories'] or 0) * servings for row in ingredients)
+    total_cost = sum(float(row['estimated_cost'] or 0) * servings for row in ingredients)
+    protein_est = round(total_calories * 0.08 / 4, 1) if total_calories else 0
+    carbs_est = round(total_calories * 0.50 / 4, 1) if total_calories else 0
+    fat_est = round(total_calories * 0.25 / 9, 1) if total_calories else 0
+
+    if not entry['eaten_logged']:
+        conn.execute('''
+            INSERT INTO diet_food_entries (log_date, meal_type, food_name, calories, protein_g, carbs_g, fat_g, notes)
+            VALUES (?,?,?,?,?,?,?,?)
+        ''', (
+            entry['planned_date'],
+            entry['meal_type'],
+            entry['dish_name'],
+            total_calories,
+            protein_est,
+            carbs_est,
+            fat_est,
+            f'Auto-logged from meal plan. Estimated food cost: {total_cost:.2f}'
+        ))
+    conn.execute('UPDATE meal_plan_entries SET is_eaten=1, eaten_logged=1 WHERE id=?', (entry_id,))
+    conn.commit()
+    conn.close()
+    flash('Meal marked eaten and logged to Diet.', 'success')
+    return redirect(url_for('meal_plan', week_start=request.form.get('week_start') or get_week_start().isoformat()))
+
+@app.route('/meal-plan/sync-grocery', methods=['POST'])
+def meal_plan_sync_grocery():
+    conn = get_db()
+    week_start = request.form.get('week_start') or get_week_start().isoformat()
+    payload = build_meal_plan_payload(conn, week_start)
+    conn.execute("DELETE FROM shopping_items WHERE source_type='meal_plan'")
+    for item in payload['grocery_items']:
+        note = f"From dishes: {', '.join(item['sources'])}"
+        conn.execute('''
+            INSERT INTO shopping_items (item_name, notes, quantity, unit, estimated_cost, category, source_type, needed_by_date)
+            VALUES (?,?,?,?,?,?,?,?)
+        ''', (
+            item['ingredient_name'],
+            note,
+            item['quantity'],
+            item['unit'],
+            item['estimated_cost'],
+            'grocery',
+            'meal_plan',
+            payload['week_end'],
+        ))
+    conn.commit()
+    conn.close()
+    flash('Shopping list synced from meal plan ingredients.', 'success')
+    return redirect(url_for('meal_plan', week_start=week_start))
+
 # ===== JOBS =====
 @app.route('/jobs')
 def jobs():
@@ -2462,8 +3675,20 @@ def shopping():
 def shopping_add():
     d = request.form
     conn = get_db()
-    conn.execute('INSERT INTO shopping_items (item_name,item_url,notes) VALUES (?,?,?)',
-        (d['item_name'], d.get('item_url'), d.get('notes')))
+    conn.execute('''
+        INSERT INTO shopping_items (item_name,item_url,notes,quantity,unit,estimated_cost,category,needed_by_date,source_type)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    ''', (
+        d['item_name'],
+        d.get('item_url'),
+        d.get('notes'),
+        float(d.get('quantity')) if d.get('quantity') else None,
+        d.get('unit') or None,
+        float(d.get('estimated_cost') or 0),
+        d.get('category') or 'general',
+        d.get('needed_by_date') or None,
+        'manual',
+    ))
     conn.commit()
     conn.close()
     return redirect(url_for('shopping'))

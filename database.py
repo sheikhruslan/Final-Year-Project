@@ -94,6 +94,21 @@ def init_db():
         is_bought INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
+    shopping_columns = {row[1] for row in c.execute('PRAGMA table_info(shopping_items)').fetchall()}
+    if 'quantity' not in shopping_columns:
+        c.execute('ALTER TABLE shopping_items ADD COLUMN quantity REAL')
+    if 'unit' not in shopping_columns:
+        c.execute('ALTER TABLE shopping_items ADD COLUMN unit TEXT')
+    if 'estimated_cost' not in shopping_columns:
+        c.execute('ALTER TABLE shopping_items ADD COLUMN estimated_cost REAL DEFAULT 0')
+    if 'category' not in shopping_columns:
+        c.execute("ALTER TABLE shopping_items ADD COLUMN category TEXT DEFAULT 'general'")
+    if 'source_type' not in shopping_columns:
+        c.execute("ALTER TABLE shopping_items ADD COLUMN source_type TEXT DEFAULT 'manual'")
+    if 'source_id' not in shopping_columns:
+        c.execute('ALTER TABLE shopping_items ADD COLUMN source_id INTEGER')
+    if 'needed_by_date' not in shopping_columns:
+        c.execute('ALTER TABLE shopping_items ADD COLUMN needed_by_date DATE')
     c.execute('''CREATE TABLE IF NOT EXISTS workout_types (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE, description TEXT,
@@ -107,6 +122,8 @@ def init_db():
         ('Legs','Quads, Hamstrings, Glutes',0),('Endurance Cardio','Treadmill intervals',1),
         ('HIIT Cardio','High intensity interval training',1),('Athletic Legs','Explosive leg training',0),
         ('Outdoor Run','Outdoor running - pace, distance, time',1),
+        ('Swimming','Pool or open-water swimming sessions',1),
+        ('Fitness Test','Beep, pacer, Cooper, or custom performance tests',1),
     ])
 
     c.execute('''CREATE TABLE IF NOT EXISTS exercises (
@@ -139,6 +156,32 @@ def init_db():
         session_date DATE NOT NULL,
         duration_minutes INTEGER, calories_burned REAL DEFAULT 0, notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workout_type_id) REFERENCES workout_types(id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS workout_schedule_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workout_type_id INTEGER,
+        weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+        title TEXT,
+        notes TEXT,
+        start_date DATE,
+        end_date DATE,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workout_type_id) REFERENCES workout_types(id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS workout_schedule_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_id INTEGER,
+        override_date DATE NOT NULL,
+        action TEXT NOT NULL DEFAULT 'unique' CHECK(action IN ('skip','replace','unique')),
+        workout_type_id INTEGER,
+        title TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rule_id) REFERENCES workout_schedule_rules(id) ON DELETE CASCADE,
         FOREIGN KEY (workout_type_id) REFERENCES workout_types(id)
     )''')
 
@@ -191,6 +234,24 @@ def init_db():
         c.execute('INSERT OR IGNORE INTO financial_categories (name,type) VALUES (?,?)', (cat,'expense'))
     for cat in ['Salary','Freelance','Investment','Gift','Other Income']:
         c.execute('INSERT OR IGNORE INTO financial_categories (name,type) VALUES (?,?)', (cat,'income'))
+    for cat in ['Groceries','Eating Out','Rent','Dates','Gifts','Memberships','Subscriptions','Commute','Octopus Top Up']:
+        c.execute('INSERT OR IGNORE INTO financial_categories (name,type) VALUES (?,?)', (cat,'expense'))
+
+    c.execute('''CREATE TABLE IF NOT EXISTS financial_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        account_type TEXT NOT NULL DEFAULT 'cash' CHECK(account_type IN ('bank','card','wallet','cash','other')),
+        purpose TEXT,
+        current_balance REAL DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    c.executemany('INSERT OR IGNORE INTO financial_accounts (name, account_type, purpose) VALUES (?,?,?)', [
+        ('Main Bank', 'bank', 'Primary balance projection account'),
+        ('Debit Card', 'card', 'Daily spending card'),
+        ('Cash', 'cash', 'Cash spending'),
+        ('Octopus Card', 'wallet', 'Transport and commuting wallet')
+    ])
 
     c.execute('''CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -200,6 +261,75 @@ def init_db():
         description TEXT, notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (category_id) REFERENCES financial_categories(id)
+    )''')
+    transaction_columns = {row[1] for row in c.execute('PRAGMA table_info(transactions)').fetchall()}
+    if 'account_id' not in transaction_columns:
+        c.execute('ALTER TABLE transactions ADD COLUMN account_id INTEGER')
+    if 'transport_mode' not in transaction_columns:
+        c.execute("ALTER TABLE transactions ADD COLUMN transport_mode TEXT DEFAULT 'general'")
+    if 'recurring_payment_id' not in transaction_columns:
+        c.execute('ALTER TABLE transactions ADD COLUMN recurring_payment_id INTEGER')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS recurring_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('income','expense')),
+        category_id INTEGER,
+        account_id INTEGER,
+        amount REAL NOT NULL,
+        cadence TEXT NOT NULL CHECK(cadence IN ('weekly','monthly','yearly')),
+        next_due_date DATE NOT NULL,
+        end_date DATE,
+        auto_add INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES financial_categories(id),
+        FOREIGN KEY (account_id) REFERENCES financial_accounts(id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS finance_budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id INTEGER,
+        label TEXT NOT NULL,
+        monthly_amount REAL NOT NULL,
+        is_fixed INTEGER DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES financial_categories(id)
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS meal_plan_dishes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        meal_type TEXT DEFAULT 'dinner' CHECK(meal_type IN ('breakfast','lunch','dinner','snack')),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS meal_plan_ingredients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dish_id INTEGER NOT NULL,
+        ingredient_name TEXT NOT NULL,
+        quantity REAL,
+        unit TEXT,
+        estimated_cost REAL DEFAULT 0,
+        calories REAL DEFAULT 0,
+        add_to_grocery INTEGER DEFAULT 1,
+        FOREIGN KEY (dish_id) REFERENCES meal_plan_dishes(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS meal_plan_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        planned_date DATE NOT NULL,
+        dish_id INTEGER NOT NULL,
+        meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast','lunch','dinner','snack')),
+        servings REAL DEFAULT 1,
+        is_eaten INTEGER DEFAULT 0,
+        eaten_logged INTEGER DEFAULT 0,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (dish_id) REFERENCES meal_plan_dishes(id) ON DELETE CASCADE
     )''')
     c.execute('''CREATE TABLE IF NOT EXISTS savings_goals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -243,6 +373,54 @@ def init_db():
     if 'parent_todo_id' not in todo_columns:
         c.execute('ALTER TABLE todos ADD COLUMN parent_todo_id INTEGER')
     c.execute('CREATE INDEX IF NOT EXISTS idx_todos_parent_todo_id ON todos(parent_todo_id)')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS inbody_scans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_datetime TEXT NOT NULL,
+        height_cm REAL,
+        age INTEGER,
+        gender TEXT,
+        weight_kg REAL,
+        total_body_water_l REAL,
+        protein_kg REAL,
+        minerals_kg REAL,
+        body_fat_mass_kg REAL,
+        smm_kg REAL,
+        bmi REAL,
+        pbf REAL,
+        inbody_score REAL,
+        bmr REAL,
+        whr REAL,
+        visceral_fat_level REAL,
+        obesity_degree REAL,
+        target_weight_kg REAL,
+        weight_control_kg REAL,
+        fat_control_kg REAL,
+        muscle_control_kg REAL,
+        segmental_lean_json TEXT,
+        segmental_fat_json TEXT,
+        impedance_json TEXT,
+        source_label TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS vo2_tests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_date DATE NOT NULL,
+        method TEXT NOT NULL CHECK(method IN ('cooper', 'beep', 'rockport')),
+        vo2_max REAL NOT NULL,
+        distance_m REAL,
+        beep_level REAL,
+        beep_shuttles INTEGER,
+        weight_kg REAL,
+        age INTEGER,
+        heart_rate INTEGER,
+        time_minutes REAL,
+        sex TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS chess_matches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

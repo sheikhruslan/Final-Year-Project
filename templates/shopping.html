@@ -14,8 +14,15 @@
             <div class="flex items-center gap-3 justify-between rounded-lg border border-gray-100 dark:border-gray-700 p-3">
                 <div class="flex-1">
                     <div class="font-medium text-sm">{{ item.item_name }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                        {% if item.quantity %}{{ item.quantity }} {{ item.unit or '' }}{% endif %}
+                        {% if item.estimated_cost %} · {{ '%.2f'|format(item.estimated_cost) }}{% endif %}
+                        {% if item.category %} · {{ item.category|title }}{% endif %}
+                        {% if item.needed_by_date %} · need by {{ item.needed_by_date }}{% endif %}
+                    </div>
                     {% if item.notes %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ item.notes }}</div>{% endif %}
                     {% if item.item_url %}<a href="{{ item.item_url }}" target="_blank" class="text-xs text-blue-600 hover:underline">Open link</a>{% endif %}
+                    {% if item.source_type and item.source_type != 'manual' %}<div class="text-xs text-amber-600 dark:text-amber-400">Source: {{ item.source_type.replace('_', ' ')|title }}</div>{% endif %}
                 </div>
                 <div class="flex items-center gap-2">
                     <form action="/shopping/toggle/{{ item.id }}" method="POST">
@@ -54,6 +61,18 @@
         <h3 class="text-lg font-bold mb-4">Add Shopping Item</h3>
         <form action="/shopping/add" method="POST" class="space-y-3">
             <input type="text" name="item_name" required placeholder="Item name" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <div class="grid grid-cols-2 gap-2">
+                <input type="number" name="quantity" step="0.1" placeholder="Quantity" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <input type="text" name="unit" placeholder="Unit" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <input type="number" name="estimated_cost" step="0.01" placeholder="Estimated cost" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <input type="date" name="needed_by_date" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            </div>
+            <select name="category" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="general">General</option>
+                <option value="grocery">Grocery</option>
+                <option value="household">Household</option>
+                <option value="work">Work</option>
+            </select>
             <input type="url" name="item_url" placeholder="Product link" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
             <textarea name="notes" rows="2" placeholder="Notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
             <div class="flex gap-2">

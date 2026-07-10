@@ -37,6 +37,17 @@
                 Log elapsed time, distance, and avg pace. Calories estimated at ~1.04 kcal per kg per km.
                 {% if latest_weight %}Using your weight of {{ latest_weight.weight_kg }}kg.{% else %}Log your weight on the gym page to improve calorie estimates.{% endif %}
             </div>
+            {% elif workout_type.name == 'Swimming' %}
+            <div class="font-medium text-blue-700 dark:text-blue-300">Swimming session mode</div>
+            <div class="text-blue-600 dark:text-blue-400 mt-1">
+                Log elapsed time, total distance, and optional laps or stroke focus. Calories use a moderate swim MET estimate.
+                {% if latest_weight %}Using your weight of {{ latest_weight.weight_kg }}kg.{% else %}Log your weight on the gym page to improve calorie estimates.{% endif %}
+            </div>
+            {% elif workout_type.name == 'Fitness Test' %}
+            <div class="font-medium text-blue-700 dark:text-blue-300">Fitness test mode</div>
+            <div class="text-blue-600 dark:text-blue-400 mt-1">
+                Schedule and log monthly tests here. Beep, pacer, and Cooper entries can sync directly into the VO2 dashboard.
+            </div>
             {% else %}
             <div class="font-medium text-blue-700 dark:text-blue-300">Treadmill interval mode</div>
             <div class="text-blue-600 dark:text-blue-400 mt-1">
@@ -142,6 +153,80 @@
                     </div>
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400">Estimated calories: <span id="run_kcal_{{ ex.id }}" class="font-medium text-gray-700 dark:text-gray-300">0.0</span> kcal</div>
+                <input type="hidden" name="set_num_{{ ex.id }}" value="1">
+                <input type="hidden" name="set_type_{{ ex.id }}" value="interval">
+            </div>
+            {% elif workout_type.name == 'Swimming' %}
+            <div class="space-y-4" id="sets-{{ ex.id }}">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Elapsed Time</label>
+                        <div class="flex gap-1 items-center">
+                            <input type="number" id="swim_min_{{ ex.id }}" min="0" placeholder="min" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm" oninput="calcSwimPace({{ ex.id }})">
+                            <span class="text-xs text-gray-400">:</span>
+                            <input type="number" id="swim_sec_{{ ex.id }}" min="0" max="59" placeholder="sec" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm" oninput="calcSwimPace({{ ex.id }})">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Distance (m)</label>
+                        <input type="number" step="1" name="distance_m_{{ ex.id }}" id="distance_m_{{ ex.id }}" placeholder="e.g. 1200" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm" oninput="calcSwimPace({{ ex.id }})">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Laps</label>
+                        <input type="number" step="1" name="swim_laps_{{ ex.id }}" placeholder="Optional" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Stroke / Focus</label>
+                        <select name="swim_stroke_{{ ex.id }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                            <option value="">Any</option>
+                            <option value="Freestyle">Freestyle</option>
+                            <option value="Breaststroke">Breaststroke</option>
+                            <option value="Backstroke">Backstroke</option>
+                            <option value="Butterfly">Butterfly</option>
+                            <option value="Technique">Technique</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Pace: <span id="swim_pace_{{ ex.id }}" class="font-medium text-gray-700 dark:text-gray-300">--:-- /100m</span> · Estimated calories: <span id="swim_kcal_{{ ex.id }}" class="font-medium text-gray-700 dark:text-gray-300">0.0</span> kcal</div>
+                <input type="hidden" name="set_num_{{ ex.id }}" value="1">
+                <input type="hidden" name="set_type_{{ ex.id }}" value="interval">
+            </div>
+            {% elif workout_type.name == 'Fitness Test' %}
+            <div class="space-y-4" id="sets-{{ ex.id }}">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Test Type</label>
+                        <select id="fitness_test_name_{{ ex.id }}" name="fitness_test_name" onchange="toggleFitnessTestInputs({{ ex.id }})" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                            <option value="Beep Test">Beep Test</option>
+                            <option value="Pacer Test">Pacer Test</option>
+                            <option value="Cooper 12-Min">Cooper 12-Min</option>
+                            <option value="Custom Test">Custom Test</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Time (minutes)</label>
+                        <input type="number" step="0.1" id="fitness_time_minutes_{{ ex.id }}" name="fitness_time_minutes" placeholder="Optional" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    </div>
+                    <div id="fitnessDistanceWrap_{{ ex.id }}" class="sm:col-span-2">
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Distance (m)</label>
+                        <input type="number" step="1" name="fitness_distance_m" placeholder="Use for Cooper or custom distance tests" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    </div>
+                    <div id="fitnessBeepWrap_{{ ex.id }}" class="sm:col-span-2 grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Level</label>
+                            <input type="number" step="0.1" name="fitness_beep_level" placeholder="e.g. 8.4" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Shuttles</label>
+                            <input type="number" step="1" name="fitness_beep_shuttles" placeholder="Optional" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Result Notes</label>
+                        <input type="text" name="fitness_result_notes" placeholder="Score, effort, or anything you want to remember" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                    </div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Beep, pacer, and Cooper tests can auto-populate your VO2 dashboard when you enter the matching fields.</div>
                 <input type="hidden" name="set_num_{{ ex.id }}" value="1">
                 <input type="hidden" name="set_type_{{ ex.id }}" value="interval">
             </div>
@@ -320,6 +405,48 @@ function calcRunPace(eid) {
     }
 }
 
+function calcSwimPace(eid) {
+    const mins = parseFloat(document.getElementById('swim_min_' + eid)?.value) || 0;
+    const secs = parseFloat(document.getElementById('swim_sec_' + eid)?.value) || 0;
+    const totalSeconds = (mins * 60) + secs;
+    const distanceM = parseFloat(document.getElementById('distance_m_' + eid)?.value) || 0;
+    const paceNode = document.getElementById('swim_pace_' + eid);
+    const kcalNode = document.getElementById('swim_kcal_' + eid);
+
+    if (totalSeconds > 0 && distanceM > 0) {
+        const pacePer100 = totalSeconds / (distanceM / 100);
+        const paceMin = Math.floor(pacePer100 / 60);
+        const paceSecs = Math.round(pacePer100 % 60);
+        paceNode.textContent = `${paceMin}:${String(paceSecs).padStart(2, '0')} /100m`;
+    } else {
+        paceNode.textContent = '--:-- /100m';
+    }
+
+    if (kcalNode) {
+        if (totalSeconds > 0 && cardioProfile.weight) {
+            const minutes = totalSeconds / 60;
+            const kcal = ((8.3 * 3.5 * Number(cardioProfile.weight)) / 200) * minutes;
+            kcalNode.textContent = kcal.toFixed(1);
+        } else {
+            kcalNode.textContent = '0.0';
+        }
+    }
+}
+
+function toggleFitnessTestInputs(eid) {
+    const testType = document.getElementById('fitness_test_name_' + eid)?.value || 'Custom Test';
+    const distanceWrap = document.getElementById('fitnessDistanceWrap_' + eid);
+    const beepWrap = document.getElementById('fitnessBeepWrap_' + eid);
+    const timeInput = document.getElementById('fitness_time_minutes_' + eid);
+    const showBeep = testType === 'Beep Test' || testType === 'Pacer Test';
+    const showDistance = testType === 'Cooper 12-Min' || testType === 'Custom Test';
+    if (distanceWrap) distanceWrap.classList.toggle('hidden', !showDistance);
+    if (beepWrap) beepWrap.classList.toggle('hidden', !showBeep);
+    if (timeInput && testType === 'Cooper 12-Min' && !timeInput.value) {
+        timeInput.value = '12';
+    }
+}
+
 function addInterval(eid) {
     const container = document.getElementById('sets-'+eid);
     const rows = container.querySelectorAll('.interval-row');
@@ -374,6 +501,11 @@ document.querySelectorAll('[id^="sets-"]').forEach((container) => {
         attachCardioListeners(eid);
         refreshCardioEstimates(eid);
     }
+});
+
+document.querySelectorAll('[id^="fitness_test_name_"]').forEach((node) => {
+    const eid = node.id.replace('fitness_test_name_', '');
+    toggleFitnessTestInputs(eid);
 });
 </script>
 {% endblock %}

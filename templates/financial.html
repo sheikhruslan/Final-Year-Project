@@ -1,73 +1,234 @@
 {% extends "base.html" %}
 {% block title %}Financial{% endblock %}
 {% block content %}
+<style>
+    .finance-hero {
+        background:
+            radial-gradient(920px 260px at 0% 0%, rgba(34, 197, 94, 0.18), transparent 55%),
+            radial-gradient(820px 280px at 100% 60%, rgba(59, 130, 246, 0.18), transparent 60%),
+            linear-gradient(135deg, #0f172a, #1e293b 58%, #0b1324);
+    }
+</style>
 <div class="space-y-6">
-    <div class="flex justify-between items-center">
-        <h1 class="text-2xl font-bold">💰 Financial</h1>
-        <div class="flex items-center gap-2">
-            <form method="GET" action="/financial">
-                <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-2">
-                    {% for value in [14, 30, 90, 180, 365] %}
-                    <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d history</option>
-                    {% endfor %}
-                </select>
-            </form>
-            <button onclick="openTxnModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">+ Add</button>
-        </div>
-    </div>
-    <div class="grid grid-cols-3 gap-4">
-        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
-            <div class="text-xl font-bold text-green-600">{{ currency }}{{ '%.2f'|format(income_total|default(0)) }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Income</div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
-            <div class="text-xl font-bold text-red-600">{{ currency }}{{ '%.2f'|format(expense_total|default(0)) }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Expenses</div>
-        </div>
-        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm text-center">
-            <div class="text-xl font-bold {% if income_total - expense_total >= 0 %}text-blue-600{% else %}text-red-600{% endif %}">{{ currency }}{{ '%.2f'|format((income_total|default(0)) - (expense_total|default(0))) }}</div>
-            <div class="text-xs text-gray-500 dark:text-gray-400">Balance</div>
-        </div>
-    </div>
-
-    <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm space-y-4">
-        <div class="flex flex-wrap items-end justify-between gap-3">
+    <section class="finance-hero rounded-2xl p-6 text-white">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
             <div>
-                <h2 class="font-semibold">Money Visualizations</h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Track money trend and spending breakdown by period.</p>
+                <p class="text-xs uppercase tracking-[0.2em] text-emerald-100/80">Money System</p>
+                <h1 class="text-3xl font-bold mt-1">Finance, Budgets, Recurring Costs, Food Planning</h1>
+                <p class="text-sm text-emerald-100/85 mt-2">Track spending, project balances, manage subscriptions, and link groceries with your meal plan.</p>
             </div>
-            <div class="flex items-end gap-2 text-sm">
-                <div>
-                    <label for="financePeriod" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Period</label>
-                    <select id="financePeriod" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                        <option value="week">Past Week (Mon-Sun)</option>
-                        <option value="month" selected>Certain Month</option>
-                        <option value="overall">Overall</option>
+            <div class="flex items-center gap-2">
+                <form method="GET" action="/financial">
+                    <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white/10 border border-white/20 rounded px-2 py-2">
+                        {% for value in [14, 30, 90, 180, 365] %}
+                        <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d history</option>
+                        {% endfor %}
                     </select>
-                </div>
-                <div id="financeMonthWrap">
-                    <label for="financeMonth" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Month</label>
-                    <input type="month" id="financeMonth" value="{{ today[:7] }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                </div>
+                </form>
+                <button onclick="openTxnModal()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm">+ Add Transaction</button>
             </div>
         </div>
-        <div id="financePeriodMeta" class="text-xs text-gray-500 dark:text-gray-400"></div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div class="border border-gray-100 dark:border-gray-700 rounded-lg p-3">
-                <h3 class="text-sm font-semibold mb-2">Money Over Time</h3>
-                <canvas id="moneyLineChart" height="180"></canvas>
-            </div>
-            <div class="border border-gray-100 dark:border-gray-700 rounded-lg p-3">
-                <h3 class="text-sm font-semibold mb-2">Spending Breakdown</h3>
-                <div class="max-h-[220px] mx-auto" style="max-width: 280px;">
-                    <canvas id="spendPieChart" height="140"></canvas>
+    </section>
+
+    <section class="grid grid-cols-2 xl:grid-cols-6 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Income</div>
+            <div class="text-2xl font-bold text-green-600 mt-1">{{ currency }}{{ '%.2f'|format(income_total|default(0)) }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Expenses</div>
+            <div class="text-2xl font-bold text-red-600 mt-1">{{ currency }}{{ '%.2f'|format(expense_total|default(0)) }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Actual Net</div>
+            <div class="text-2xl font-bold {% if actual_balance >= 0 %}text-blue-600{% else %}text-red-600{% endif %} mt-1">{{ currency }}{{ '%.2f'|format(actual_balance) }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Liquid Balance</div>
+            <div class="text-2xl font-bold text-cyan-600 mt-1">{{ currency }}{{ '%.2f'|format(liquid_balance) }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Disposable / Month</div>
+            <div class="text-2xl font-bold {% if disposable_income >= 0 %}text-emerald-600{% else %}text-red-600{% endif %} mt-1">{{ currency }}{{ '%.2f'|format(disposable_income) }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Meal Plan Week Cost</div>
+            <div class="text-2xl font-bold text-amber-600 mt-1">{{ currency }}{{ '%.2f'|format(weekly_meal_plan_cost) }}</div>
+        </div>
+    </section>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="xl:col-span-2 bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm space-y-4">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                    <h2 class="font-semibold">Spending Visuals</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Category, transport, and projected-balance views for actual and planned cash flow.</p>
+                </div>
+                <div class="flex items-end gap-2 text-sm">
+                    <div>
+                        <label for="financePeriod" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Period</label>
+                        <select id="financePeriod" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            <option value="week">Past Week</option>
+                            <option value="month" selected>Certain Month</option>
+                            <option value="overall">Overall</option>
+                        </select>
+                    </div>
+                    <div id="financeMonthWrap">
+                        <label for="financeMonth" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Month</label>
+                        <input type="month" id="financeMonth" value="{{ today[:7] }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    </div>
                 </div>
             </div>
+            <div id="financePeriodMeta" class="text-xs text-gray-500 dark:text-gray-400"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Money Over Time</h3>
+                    <canvas id="moneyLineChart" height="180"></canvas>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Spend by Category</h3>
+                    <canvas id="categorySpendChart" height="180"></canvas>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Transport Usage Split</h3>
+                    <canvas id="transportSpendChart" height="180"></canvas>
+                </div>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                    <h3 class="text-sm font-semibold mb-2">Projected Balance</h3>
+                    <canvas id="projectionChart" height="180"></canvas>
+                </div>
+            </div>
+            <div id="financeNoData" class="hidden text-sm text-gray-500 dark:text-gray-400">No transactions in this period yet.</div>
         </div>
-        <div id="financeNoData" class="hidden text-sm text-gray-500 dark:text-gray-400">No transactions in this period yet.</div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm space-y-4">
+            <div>
+                <h2 class="font-semibold">Global Variables</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Balances and projection horizon used by the planner.</p>
+            </div>
+            <form action="/financial/account/save" method="POST" class="space-y-3 text-sm">
+                {% for account in accounts %}
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">{{ account.name }}</label>
+                    <input type="number" step="0.01" name="account_balance_{{ account.id }}" value="{{ account.current_balance or 0 }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                </div>
+                {% endfor %}
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Projection Months</label>
+                    <input type="number" min="1" max="24" name="finance_projection_months" value="{{ projection_months }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                </div>
+                <button class="w-full bg-gray-900 text-white rounded py-2">Save Finance Settings</button>
+            </form>
+            <div class="space-y-2 text-sm">
+                {% for insight in insights %}
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 px-3 py-2">{{ insight }}</div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Recurring Payments</h2>
+            <form action="/financial/recurring/add" method="POST" class="space-y-2 text-sm mb-4">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" name="name" required placeholder="Name" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <input type="number" name="amount" step="0.01" required placeholder="Amount" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <select name="type" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"><option value="expense">Expense</option><option value="income">Income</option></select>
+                    <select name="cadence" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="yearly">Yearly</option></select>
+                    <select name="category_id" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"><option value="">Category</option>{% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }}</option>{% endfor %}</select>
+                    <select name="account_id" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"><option value="">Account</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.name }}</option>{% endfor %}</select>
+                    <input type="date" name="next_due_date" value="{{ today }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <input type="date" name="end_date" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                </div>
+                <input type="text" name="notes" placeholder="Notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="w-full bg-blue-600 text-white rounded py-2">Add Recurring Payment</button>
+            </form>
+            <div class="space-y-2 max-h-80 overflow-y-auto">
+                {% for item in recurring_payments %}
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-sm">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="font-medium">{{ item.name }}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.cadence }} · {{ item.cat_name or 'No category' }} · {{ item.account_name or 'No account' }}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-medium {% if item.type == 'income' %}text-green-600{% else %}text-red-600{% endif %}">{{ currency }}{{ '%.2f'|format(item.amount) }}</div>
+                            <form action="/financial/recurring/toggle/{{ item.id }}" method="POST"><button class="text-xs {{ 'text-amber-500' if item.is_active else 'text-emerald-500' }}">{{ 'Pause' if item.is_active else 'Resume' }}</button></form>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-400">No recurring payments yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Budgets + Disposable Income</h2>
+            <form action="/financial/budget/add" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-4">
+                <input type="text" name="label" required placeholder="Budget label" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="number" name="monthly_amount" step="0.01" required placeholder="Monthly amount" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <select name="category_id" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2"><option value="">Category</option>{% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }}</option>{% endfor %}</select>
+                <label class="flex items-center gap-2 rounded border border-gray-200 dark:border-gray-700 px-3 py-2"><input type="checkbox" name="is_fixed"><span>Fixed budget</span></label>
+                <input type="text" name="notes" placeholder="Notes" class="md:col-span-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="md:col-span-2 bg-blue-600 text-white rounded py-2">Add Budget</button>
+            </form>
+            <div class="space-y-2 text-sm mb-4">
+                {% for item in budgets %}
+                <div class="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2">
+                    <div>
+                        <div class="font-medium">{{ item.label }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ item.cat_name or 'General' }}{% if item.is_fixed %} · fixed{% endif %}</div>
+                    </div>
+                    <div class="font-medium">{{ currency }}{{ '%.2f'|format(item.monthly_amount) }}</div>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-400">No budgets set yet.</p>
+                {% endfor %}
+            </div>
+            <div class="rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-3 text-sm">
+                <div class="flex items-center justify-between"><span>Total Monthly Budget</span><strong>{{ currency }}{{ '%.2f'|format(budget_total) }}</strong></div>
+                <div class="flex items-center justify-between mt-1"><span>Recurring Income</span><strong class="text-green-600">{{ currency }}{{ '%.2f'|format(recurring_monthly_income) }}</strong></div>
+                <div class="flex items-center justify-between mt-1"><span>Recurring Expense</span><strong class="text-red-600">{{ currency }}{{ '%.2f'|format(recurring_monthly_expense) }}</strong></div>
+                <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-200 dark:border-gray-700"><span>Disposable Income</span><strong class="{% if disposable_income >= 0 %}text-emerald-600{% else %}text-red-600{% endif %}">{{ currency }}{{ '%.2f'|format(disposable_income) }}</strong></div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+            <h2 class="font-semibold mb-3">Goals + Projection</h2>
+            <form action="/financial/savings/add" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4 text-sm">
+                <input type="text" name="name" required placeholder="Goal" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="number" name="target_amount" step="0.01" required placeholder="Target" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="number" name="current_amount" step="0.01" placeholder="Current" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <input type="date" name="deadline" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                <button class="md:col-span-2 bg-blue-600 text-white rounded py-2">Add Goal</button>
+            </form>
+            <div class="space-y-3">
+                {% for goal in savings_goals %}
+                {% set plan = goal_plans | selectattr('id', 'equalto', goal.id) | list | first %}
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 text-sm">
+                    <div class="flex items-center justify-between gap-3 mb-2">
+                        <div class="font-medium">{{ goal.name }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ currency }}{{ '%.2f'|format(goal.current_amount) }} / {{ currency }}{{ '%.2f'|format(goal.target_amount) }}</div>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2"><div class="bg-green-500 h-2 rounded-full" style="width: {{ ((goal.current_amount / goal.target_amount) * 100) if goal.target_amount else 0 }}%"></div></div>
+                    {% if plan and plan.required_monthly is not none %}
+                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">Need {{ currency }}{{ '%.2f'|format(plan.required_monthly) }}/month for {{ plan.months_left }} month{% if plan.months_left != 1 %}s{% endif %}</div>
+                    {% endif %}
+                    <form action="/financial/savings/contribute/{{ goal.id }}" method="POST" class="flex gap-2">
+                        <input type="number" name="amount" step="0.01" placeholder="Add amount" class="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <button class="bg-green-600 text-white px-3 rounded">Save</button>
+                    </form>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-400">No savings goals yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
             <h2 class="font-semibold mb-3">Expected Cash</h2>
             <form action="/financial/expected/add" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-sm">
@@ -95,67 +256,56 @@
         </div>
 
         <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
-            <h2 class="font-semibold mb-3">Savings</h2>
-            <form action="/financial/savings/add" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4 text-sm">
-                <input type="text" name="name" required placeholder="Goal" class="md:col-span-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                <input type="number" name="target_amount" step="0.01" required placeholder="Target" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                <input type="number" name="current_amount" step="0.01" placeholder="Current" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                <input type="date" name="deadline" class="md:col-span-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                <button class="bg-blue-600 text-white rounded p-2">Add</button>
-            </form>
-            <div class="space-y-3">
-                {% for goal in savings_goals %}
-                <div class="rounded-lg border border-gray-100 dark:border-gray-700 p-3">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="font-medium text-sm">{{ goal.name }}</div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">{{ currency }}{{ '%.2f'|format(goal.current_amount) }} / {{ currency }}{{ '%.2f'|format(goal.target_amount) }}</div>
-                    </div>
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-2">
-                        <div class="bg-green-500 h-2 rounded-full" style="width: {{ ((goal.current_amount / goal.target_amount) * 100) if goal.target_amount else 0 }}%"></div>
-                    </div>
-                    <form action="/financial/savings/contribute/{{ goal.id }}" method="POST" class="flex gap-2 text-sm">
-                        <input type="number" name="amount" step="0.01" placeholder="Add amount" class="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
-                        <button class="bg-green-600 text-white px-3 rounded">Save</button>
-                    </form>
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                    <h2 class="font-semibold">Meal Plan Link</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Plan meals, predict grocery cost, and sync ingredients to shopping.</p>
                 </div>
-                {% else %}
-                <p class="text-sm text-gray-400">No savings goals yet.</p>
-                {% endfor %}
+                <a href="/meal-plan" class="bg-emerald-600 text-white px-3 py-2 rounded text-sm">Open Meal Plan</a>
+            </div>
+            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-4 text-sm">
+                <div class="flex items-center justify-between"><span>Forecast weekly meal spend</span><strong>{{ currency }}{{ '%.2f'|format(weekly_meal_plan_cost) }}</strong></div>
+                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">Use Meal Plan dishes with ingredient costs so this page can compare food budget vs actual spending.</div>
             </div>
         </div>
     </div>
 
     {% if transactions %}
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-        <table class="w-full text-sm">
-            <thead><tr class="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
-                <th class="text-left p-3">Date</th><th class="text-left p-3">Description</th><th class="text-left p-3">Category</th><th class="text-right p-3">Amount</th><th class="text-left p-3">Actions</th>
-            </tr></thead>
-            <tbody>
-            {% for t in transactions %}
-            <tr class="border-b border-gray-50 dark:border-gray-700/50">
-                <td class="p-3 text-gray-500">{{ t.transaction_date }}</td>
-                <td class="p-3">{{ t.description }}</td>
-                <td class="p-3 text-gray-500">{{ t.cat_name or '-' }}</td>
-                <td class="p-3 text-right font-medium {% if t.type == 'income' %}text-green-600{% else %}text-red-600{% endif %}">{% if t.type == 'income' %}+{% else %}-{% endif %}{{ currency }}{{ t.amount }}</td>
-                <td class="p-3">
-                    <div class="flex gap-2 text-xs">
-                        <button type="button" onclick="openTxnModal({{ t.id }}, {{ t.type|tojson }}, {{ t.amount }}, {{ t.description|tojson }}, {{ (t.category_id or '')|tojson }}, {{ t.transaction_date|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
-                        <form action="/financial/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete this transaction?')">
-                            <button class="text-red-500">Delete</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <details class="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
+        <summary class="cursor-pointer px-5 py-4 font-semibold">Transactions Table</summary>
+        <div class="overflow-x-auto border-t border-gray-100 dark:border-gray-700">
+            <table class="w-full text-sm">
+                <thead><tr class="text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+                    <th class="text-left p-3">Date</th><th class="text-left p-3">Description</th><th class="text-left p-3">Category</th><th class="text-left p-3">Account</th><th class="text-right p-3">Amount</th><th class="text-left p-3">Actions</th>
+                </tr></thead>
+                <tbody>
+                {% for t in transactions %}
+                <tr class="border-b border-gray-50 dark:border-gray-700/50">
+                    <td class="p-3 text-gray-500">{{ t.transaction_date }}</td>
+                    <td class="p-3">
+                        <div>{{ t.description }}</div>
+                        {% if t.transport_mode and t.transport_mode != 'general' %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ t.transport_mode|title }}</div>{% endif %}
+                    </td>
+                    <td class="p-3 text-gray-500">{{ t.cat_name or '-' }}</td>
+                    <td class="p-3 text-gray-500">{{ t.account_name or '-' }}</td>
+                    <td class="p-3 text-right font-medium {% if t.type == 'income' %}text-green-600{% else %}text-red-600{% endif %}">{% if t.type == 'income' %}+{% else %}-{% endif %}{{ currency }}{{ t.amount }}</td>
+                    <td class="p-3">
+                        <div class="flex gap-2 text-xs">
+                            <button type="button" onclick="openTxnModal({{ t.id }}, {{ t.type|tojson }}, {{ t.amount }}, {{ t.description|tojson }}, {{ (t.category_id or '')|tojson }}, {{ t.transaction_date|tojson }}, {{ (t.account_id or '')|tojson }}, {{ (t.transport_mode or 'general')|tojson }})" class="text-blue-600 dark:text-blue-400">Edit</button>
+                            <form action="/financial/delete/{{ t.id }}" method="POST" onsubmit="return confirm('Delete this transaction?')"><button class="text-red-500">Delete</button></form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
     {% else %}
     <div class="text-center py-16 text-gray-400"><p>No transactions yet</p></div>
     {% endif %}
 </div>
-<!-- Add Modal -->
+
 <div id="addModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <h3 id="txnModalTitle" class="text-lg font-bold mb-4">Add Transaction</h3>
@@ -171,7 +321,18 @@
                 <option value="">No category</option>
                 {% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }} ({{ cat.type }})</option>{% endfor %}
             </select>
+            <select name="account_id" id="txn_account" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="">No account</option>
+                {% for account in accounts %}<option value="{{ account.id }}">{{ account.name }}</option>{% endfor %}
+            </select>
+            <select name="transport_mode" id="txn_transport_mode" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+                <option value="general">General</option>
+                <option value="commute">Commute</option>
+                <option value="leisure">Leisure</option>
+                <option value="errands">Errands</option>
+            </select>
             <input type="date" name="transaction_date" id="txn_date" value="{{ today }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm">
+            <textarea name="notes" rows="2" placeholder="Notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2 text-sm"></textarea>
             <div class="flex gap-2">
                 <button id="txnSubmitBtn" type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded text-sm">Add</button>
                 <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="flex-1 bg-gray-200 dark:bg-gray-700 py-2 rounded text-sm">Cancel</button>
@@ -182,26 +343,28 @@
 {% endblock %}
 {% block scripts %}
 <script>
-function openTxnModal(id='', type='expense', amount='', description='', categoryId='', txnDate='{{ today }}') {
+function openTxnModal(id='', type='expense', amount='', description='', categoryId='', txnDate='{{ today }}', accountId='', transportMode='general') {
     document.getElementById('txnModalTitle').textContent = id ? 'Edit Transaction' : 'Add Transaction';
     document.getElementById('txnSubmitBtn').textContent = id ? 'Update' : 'Add';
     document.getElementById('txn_id').value = id || '';
     document.getElementById('txn_amount').value = amount || '';
     document.getElementById('txn_description').value = description || '';
     document.getElementById('txn_category').value = categoryId || '';
+    document.getElementById('txn_account').value = accountId || '';
+    document.getElementById('txn_transport_mode').value = transportMode || 'general';
     document.getElementById('txn_date').value = txnDate || '{{ today }}';
     document.getElementById(type === 'income' ? 'txn_type_income' : 'txn_type_expense').checked = true;
     document.getElementById('addModal').classList.remove('hidden');
 }
 
 {% if edit_txn %}
-openTxnModal({{ edit_txn.id }}, {{ edit_txn.type|tojson }}, {{ edit_txn.amount }}, {{ edit_txn.description|tojson }}, {{ (edit_txn.category_id or '')|tojson }}, {{ edit_txn.transaction_date|tojson }});
+openTxnModal({{ edit_txn.id }}, {{ edit_txn.type|tojson }}, {{ edit_txn.amount }}, {{ edit_txn.description|tojson }}, {{ (edit_txn.category_id or '')|tojson }}, {{ edit_txn.transaction_date|tojson }}, {{ (edit_txn.account_id or '')|tojson }}, {{ (edit_txn.transport_mode or 'general')|tojson }});
 {% endif %}
 
 const financeTransactions = {{ chart_transactions|tojson }};
 const financeCurrency = {{ currency|tojson }};
+const chartPayload = {{ chart_payload|tojson }};
 let moneyLineChart;
-let spendPieChart;
 
 function getPastWeekRange() {
     const today = new Date();
@@ -217,9 +380,7 @@ function getPastWeekRange() {
 
 function getMonthRange(monthValue) {
     const [year, month] = monthValue.split('-').map(Number);
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0);
-    return { start, end };
+    return { start: new Date(year, month - 1, 1), end: new Date(year, month, 0) };
 }
 
 function getOverallRange() {
@@ -227,135 +388,86 @@ function getOverallRange() {
         const now = new Date();
         return { start: now, end: now };
     }
-    return {
-        start: new Date(financeTransactions[0].transaction_date),
-        end: new Date(financeTransactions[financeTransactions.length - 1].transaction_date)
-    };
+    return { start: new Date(financeTransactions[0].transaction_date), end: new Date(financeTransactions[financeTransactions.length - 1].transaction_date) };
 }
 
-function formatDateLabel(d) {
-    return d.toISOString().slice(0, 10);
-}
-
-function parseTxDate(value) {
-    const [y, m, d] = value.split('-').map(Number);
-    return new Date(y, m - 1, d);
-}
+function formatDateLabel(d) { return d.toISOString().slice(0, 10); }
+function parseTxDate(value) { const [y, m, d] = value.split('-').map(Number); return new Date(y, m - 1, d); }
 
 function getFilteredTransactions() {
     const period = document.getElementById('financePeriod').value;
     const monthInput = document.getElementById('financeMonth');
     let range;
-    if (period === 'week') {
-        range = getPastWeekRange();
-    } else if (period === 'month') {
-        range = getMonthRange(monthInput.value);
-    } else {
-        range = getOverallRange();
-    }
+    if (period === 'week') range = getPastWeekRange();
+    else if (period === 'month') range = getMonthRange(monthInput.value);
+    else range = getOverallRange();
 
     const filtered = financeTransactions.filter(t => {
         const dt = parseTxDate(t.transaction_date);
         return dt >= range.start && dt <= range.end;
     });
     const prior = financeTransactions.filter(t => parseTxDate(t.transaction_date) < range.start);
-
-    const meta = document.getElementById('financePeriodMeta');
-    meta.textContent = `Showing: ${formatDateLabel(range.start)} to ${formatDateLabel(range.end)}`;
-    return { filtered, range, prior };
+    document.getElementById('financePeriodMeta').textContent = `Showing: ${formatDateLabel(range.start)} to ${formatDateLabel(range.end)}`;
+    return { filtered, prior };
 }
 
 function buildLineSeries(transactions, priorTransactions) {
     const labels = ['Start'];
     const values = [];
-    let running = priorTransactions.reduce((sum, t) => {
-        const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
-        return sum + delta;
-    }, 0);
+    let running = priorTransactions.reduce((sum, t) => sum + (t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0)), 0);
     values.push(Number(running.toFixed(2)));
-
     transactions.forEach((t, idx) => {
-        const delta = t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
-        running += delta;
+        running += t.type === 'income' ? Number(t.amount || 0) : -Number(t.amount || 0);
         labels.push(`${t.transaction_date.slice(5)} #${idx + 1}`);
         values.push(Number(running.toFixed(2)));
     });
     return { labels, values };
 }
 
-function buildExpenseBreakdown(transactions) {
-    const byCat = {};
-    transactions
-        .filter(t => t.type === 'expense')
-        .forEach(t => {
-            const cat = t.cat_name || 'Uncategorized';
-            byCat[cat] = (byCat[cat] || 0) + Number(t.amount || 0);
-        });
-    const labels = Object.keys(byCat);
-    const values = labels.map(l => Number(byCat[l].toFixed(2)));
-    return { labels, values };
-}
-
 function renderFinanceCharts() {
     const { filtered, prior } = getFilteredTransactions();
-    const noData = document.getElementById('financeNoData');
-    noData.classList.toggle('hidden', filtered.length > 0);
-
+    document.getElementById('financeNoData').classList.toggle('hidden', filtered.length > 0);
     const line = buildLineSeries(filtered, prior);
-    const pie = buildExpenseBreakdown(filtered);
-
-    const lineEl = document.getElementById('moneyLineChart');
-    const pieEl = document.getElementById('spendPieChart');
-
     if (moneyLineChart) moneyLineChart.destroy();
-    if (spendPieChart) spendPieChart.destroy();
-
-    moneyLineChart = new Chart(lineEl, {
+    moneyLineChart = new Chart(document.getElementById('moneyLineChart'), {
         type: 'line',
-        data: {
-            labels: line.labels,
-            datasets: [{
-                label: `Balance Change (${financeCurrency})`,
-                data: line.values,
-                borderColor: '#2563eb',
-                backgroundColor: '#2563eb22',
-                borderWidth: 2,
-                pointRadius: 2,
-                tension: 0.25,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true, position: 'bottom' } },
-            scales: { y: { title: { display: true, text: `Amount (${financeCurrency})` } } }
-        }
-    });
-
-    spendPieChart = new Chart(pieEl, {
-        type: 'pie',
-        data: {
-            labels: pie.labels.length ? pie.labels : ['No expenses'],
-            datasets: [{
-                data: pie.labels.length ? pie.values : [1],
-                backgroundColor: pie.labels.length
-                    ? ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#64748b']
-                    : ['#d1d5db']
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { position: 'bottom' } }
-        }
+        data: { labels: line.labels, datasets: [{ label: `Balance Change (${financeCurrency})`, data: line.values, borderColor: '#2563eb', backgroundColor: '#2563eb22', borderWidth: 2, pointRadius: 2, tension: 0.25, fill: true }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { title: { display: true, text: `Amount (${financeCurrency})` } } } }
     });
 }
+
+new Chart(document.getElementById('categorySpendChart'), {
+    type: 'bar',
+    data: {
+        labels: chartPayload.category_spend.map(item => item.label),
+        datasets: [{ label: 'Spend', data: chartPayload.category_spend.map(item => item.amount), backgroundColor: '#ef4444aa', borderColor: '#ef4444', borderWidth: 1 }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+});
+
+new Chart(document.getElementById('transportSpendChart'), {
+    type: 'doughnut',
+    data: {
+        labels: chartPayload.transport_spend.length ? chartPayload.transport_spend.map(item => item.label) : ['No transport spend'],
+        datasets: [{ data: chartPayload.transport_spend.length ? chartPayload.transport_spend.map(item => item.amount) : [1], backgroundColor: chartPayload.transport_spend.length ? ['#0284c7', '#14b8a6', '#f97316', '#64748b'] : ['#d1d5db'] }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+});
+
+new Chart(document.getElementById('projectionChart'), {
+    type: 'line',
+    data: {
+        labels: chartPayload.projection.map(item => item.month),
+        datasets: [{ label: 'Projected balance', data: chartPayload.projection.map(item => item.projected_balance), borderColor: '#16a34a', backgroundColor: '#16a34a22', fill: true, tension: 0.25, pointRadius: 3 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+});
 
 document.getElementById('financePeriod').addEventListener('change', (e) => {
     document.getElementById('financeMonthWrap').classList.toggle('hidden', e.target.value !== 'month');
     renderFinanceCharts();
 });
 document.getElementById('financeMonth').addEventListener('change', renderFinanceCharts);
-
 renderFinanceCharts();
 </script>
 {% endblock %}

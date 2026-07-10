@@ -6,6 +6,7 @@
         <h1 class="text-2xl font-bold">💪 Gym Log</h1>
         <div class="flex items-center gap-2">
             <form method="GET" action="/gym">
+                <input type="hidden" name="month" value="{{ selected_month }}">
                 <select name="history_days" onchange="this.form.submit()" class="text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded px-2 py-2">
                     {% for value in [14, 30, 90, 180] %}
                     <option value="{{ value }}" {% if history_days == value %}selected{% endif %}>{{ value }}d history</option>
@@ -16,36 +17,180 @@
         </div>
     </div>
 
-    <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
-        <h2 class="text-sm font-semibold mb-3">Weekly Schedule</h2>
-        <div class="grid grid-cols-7 gap-2 text-xs">
-            <div class="text-center p-2 rounded bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700">
-                <div class="font-semibold text-blue-600 dark:text-blue-400">Mon</div>
-                <div class="text-gray-600 dark:text-gray-300">Push</div>
+    <div class="grid grid-cols-1 xl:grid-cols-[1.45fr_0.95fr] gap-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-sm font-semibold">Workout Calendar</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Set recurring weekday sessions, skip busy days ahead of time, or slot one-off workouts like swimming and monthly tests.</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <a href="/gym?month={{ prev_month }}&history_days={{ history_days }}" class="px-3 py-2 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">←</a>
+                    <div class="font-semibold min-w-[7rem] text-center">{{ month_label }}</div>
+                    <a href="/gym?month={{ next_month }}&history_days={{ history_days }}" class="px-3 py-2 rounded bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">→</a>
+                </div>
             </div>
-            <div class="text-center p-2 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700">
-                <div class="font-semibold text-red-600 dark:text-red-400">Tue</div>
-                <div class="text-gray-600 dark:text-gray-300">Endurance</div>
+
+            <div class="grid grid-cols-7 gap-2 text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-2">
+                {% for label in weekday_labels %}
+                <div class="px-2 py-1 text-center">{{ label }}</div>
+                {% endfor %}
             </div>
-            <div class="text-center p-2 rounded bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700">
-                <div class="font-semibold text-green-600 dark:text-green-400">Wed</div>
-                <div class="text-gray-600 dark:text-gray-300">Pull</div>
+
+            <div class="space-y-2">
+                {% for week in calendar_weeks %}
+                <div class="grid grid-cols-7 gap-2">
+                    {% for day in week %}
+                    <div class="min-h-[10rem] rounded-xl border p-2 {% if day.is_current_month %}border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40{% else %}border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/20 opacity-60{% endif %} {% if day.is_today %}ring-2 ring-blue-500/40{% endif %}">
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <div class="text-xs font-semibold {% if day.is_today %}text-blue-600 dark:text-blue-400{% else %}text-gray-600 dark:text-gray-300{% endif %}">{{ day.day_number }}</div>
+                            {% if day.session_count %}
+                            <div class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">{{ day.session_count }} logged</div>
+                            {% endif %}
+                        </div>
+                        <div class="space-y-2">
+                            {% for item in day.entries %}
+                            <div class="rounded-lg border px-2 py-2 text-[11px] {% if item.is_skipped %}border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800/70 text-gray-400 dark:text-gray-500{% elif item.workout_type_id and item.is_cardio %}border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20{% elif item.workout_type_id %}border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20{% else %}border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20{% endif %}">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="font-semibold leading-4">{{ item.title }}</div>
+                                    {% if item.is_skipped %}
+                                    <span class="text-[10px] uppercase tracking-wide">Skipped</span>
+                                    {% elif item.source == 'override' %}
+                                    <span class="text-[10px] uppercase tracking-wide">Custom</span>
+                                    {% endif %}
+                                </div>
+                                {% if item.notes %}<div class="mt-1 text-[10px] opacity-75 leading-4">{{ item.notes }}</div>{% endif %}
+                                <div class="mt-2 flex flex-wrap gap-2 text-[10px]">
+                                    {% if item.can_start %}
+                                    <a href="{{ item.start_url }}" class="text-blue-700 dark:text-blue-300 hover:underline">Start</a>
+                                    {% endif %}
+                                    {% if item.source == 'rule' %}
+                                    <a href="/gym?month={{ selected_month }}&history_days={{ history_days }}&edit_rule_id={{ item.rule_id }}" class="text-gray-700 dark:text-gray-300 hover:underline">Edit</a>
+                                    <form action="/gym/schedule/skip/{{ item.rule_id }}" method="POST">
+                                        <input type="hidden" name="month" value="{{ selected_month }}">
+                                        <input type="hidden" name="override_date" value="{{ day.date }}">
+                                        <button class="text-amber-700 dark:text-amber-300 hover:underline">Skip</button>
+                                    </form>
+                                    {% elif item.override_id %}
+                                        {% if not item.is_skipped %}
+                                        <a href="/gym?month={{ selected_month }}&history_days={{ history_days }}&edit_override_id={{ item.override_id }}" class="text-gray-700 dark:text-gray-300 hover:underline">Edit</a>
+                                        {% endif %}
+                                        <form action="/gym/schedule/override/delete/{{ item.override_id }}" method="POST">
+                                            <input type="hidden" name="month" value="{{ selected_month }}">
+                                            <button class="{% if item.is_skipped %}text-emerald-700 dark:text-emerald-300{% else %}text-red-700 dark:text-red-300{% endif %} hover:underline">{{ 'Restore' if item.is_skipped else 'Delete' }}</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% if not day.entries %}
+                            <div class="text-[11px] text-gray-400 dark:text-gray-500 py-2">No plan</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
             </div>
-            <div class="text-center p-2 rounded bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700">
-                <div class="font-semibold text-orange-600 dark:text-orange-400">Thu</div>
-                <div class="text-gray-600 dark:text-gray-300">HIIT</div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h2 class="font-semibold">Recurring Workout</h2>
+                    {% if edit_schedule_rule %}<a href="/gym?month={{ selected_month }}&history_days={{ history_days }}" class="text-xs text-gray-500 dark:text-gray-400 hover:underline">Cancel edit</a>{% endif %}
+                </div>
+                <form action="/gym/schedule/rule/save" method="POST" class="space-y-3 text-sm">
+                    <input type="hidden" name="month" value="{{ selected_month }}">
+                    <input type="hidden" name="rule_id" value="{{ edit_schedule_rule.id if edit_schedule_rule else '' }}">
+                    <div class="grid grid-cols-2 gap-2">
+                        <select name="weekday" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            {% for label in weekday_labels %}
+                            <option value="{{ loop.index0 }}" {% if edit_schedule_rule and edit_schedule_rule.weekday == loop.index0 %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="workout_type_id" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            <option value="">Custom only</option>
+                            {% for wt in workout_types %}
+                            <option value="{{ wt.id }}" {% if edit_schedule_rule and edit_schedule_rule.workout_type_id == wt.id %}selected{% endif %}>{{ wt.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <input type="text" name="title" value="{{ edit_schedule_rule.title if edit_schedule_rule else '' }}" placeholder="Optional custom title (e.g. Pacer Test)" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="date" name="start_date" value="{{ edit_schedule_rule.start_date if edit_schedule_rule else '' }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <input type="date" name="end_date" value="{{ edit_schedule_rule.end_date if edit_schedule_rule else '' }}" class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    </div>
+                    <textarea name="notes" rows="2" placeholder="Notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">{{ edit_schedule_rule.notes if edit_schedule_rule else '' }}</textarea>
+                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white rounded py-2">{{ 'Update recurring plan' if edit_schedule_rule else 'Save recurring plan' }}</button>
+                </form>
             </div>
-            <div class="text-center p-2 rounded bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700">
-                <div class="font-semibold text-purple-600 dark:text-purple-400">Fri</div>
-                <div class="text-gray-600 dark:text-gray-300">Legs</div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                {% set override_action = edit_schedule_override.action if edit_schedule_override else 'unique' %}
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h2 class="font-semibold">Specific Day Override</h2>
+                    {% if edit_schedule_override %}<a href="/gym?month={{ selected_month }}&history_days={{ history_days }}" class="text-xs text-gray-500 dark:text-gray-400 hover:underline">Cancel edit</a>{% endif %}
+                </div>
+                <form action="/gym/schedule/override/save" method="POST" class="space-y-3 text-sm">
+                    <input type="hidden" name="month" value="{{ selected_month }}">
+                    <input type="hidden" name="override_id" value="{{ edit_schedule_override.id if edit_schedule_override else '' }}">
+                    <input type="date" name="override_date" value="{{ edit_schedule_override.override_date if edit_schedule_override else today }}" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    <select id="overrideAction" name="action" onchange="toggleScheduleOverrideFields()" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                        <option value="unique" {% if override_action == 'unique' %}selected{% endif %}>Add a one-off workout</option>
+                        <option value="replace" {% if override_action == 'replace' %}selected{% endif %}>Replace a recurring workout on that day</option>
+                        <option value="skip" {% if override_action == 'skip' %}selected{% endif %}>Skip a recurring workout on that day</option>
+                    </select>
+                    <div id="overrideRuleWrap">
+                        <select name="rule_id" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            <option value="">Choose recurring workout</option>
+                            {% for rule in schedule_rules %}
+                            <option value="{{ rule.id }}" {% if edit_schedule_override and edit_schedule_override.rule_id == rule.id %}selected{% endif %}>{{ rule.weekday_label }} · {{ rule.title or rule.workout_name or 'Custom Session' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div id="overrideWorkoutWrap">
+                        <select name="workout_type_id" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                            <option value="">Custom only</option>
+                            {% for wt in workout_types %}
+                            <option value="{{ wt.id }}" {% if edit_schedule_override and edit_schedule_override.workout_type_id == wt.id %}selected{% endif %}>{{ wt.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div id="overrideTitleWrap">
+                        <input type="text" name="title" value="{{ edit_schedule_override.title if edit_schedule_override else '' }}" placeholder="Optional custom title (e.g. Swim Technique Session)" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">
+                    </div>
+                    <textarea name="notes" rows="2" placeholder="Notes" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-2">{{ edit_schedule_override.notes if edit_schedule_override else '' }}</textarea>
+                    <button class="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded py-2">{{ 'Update day override' if edit_schedule_override else 'Save day override' }}</button>
+                </form>
             </div>
-            <div class="text-center p-2 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700">
-                <div class="font-semibold text-red-600 dark:text-red-400">Sat</div>
-                <div class="text-gray-600 dark:text-gray-300">Endurance</div>
-            </div>
-            <div class="text-center p-2 rounded bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700">
-                <div class="font-semibold text-indigo-600 dark:text-indigo-400">Sun</div>
-                <div class="text-gray-600 dark:text-gray-300">Athl. Legs</div>
+
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-5 shadow-sm">
+                <h2 class="font-semibold mb-3">Recurring Plans</h2>
+                <div class="space-y-2 text-sm max-h-72 overflow-y-auto">
+                    {% for rule in schedule_rules %}
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <div class="font-medium">{{ rule.weekday_label }} · {{ rule.title or rule.workout_name or 'Custom Session' }}</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">{{ rule.notes or 'No notes' }}</div>
+                            </div>
+                            <div class="flex gap-2 text-xs">
+                                <a href="/gym?month={{ selected_month }}&history_days={{ history_days }}&edit_rule_id={{ rule.id }}" class="text-blue-600 dark:text-blue-400 hover:underline">Edit</a>
+                                <form action="/gym/schedule/rule/delete/{{ rule.id }}" method="POST" onsubmit="return confirm('Remove this recurring workout from the calendar?')">
+                                    <input type="hidden" name="month" value="{{ selected_month }}">
+                                    <button class="text-red-500 hover:underline">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% if rule.start_date or rule.end_date %}
+                        <div class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">{{ rule.start_date or 'Any start' }} to {{ rule.end_date or 'Open ended' }}</div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="text-sm text-gray-400">No recurring workouts yet.</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
@@ -338,5 +483,17 @@ function deleteWorkoutType(wtId, name) {
             window.location.reload();
         });
 }
+
+function toggleScheduleOverrideFields() {
+    const action = document.getElementById('overrideAction')?.value || 'unique';
+    const ruleWrap = document.getElementById('overrideRuleWrap');
+    const workoutWrap = document.getElementById('overrideWorkoutWrap');
+    const titleWrap = document.getElementById('overrideTitleWrap');
+    if (ruleWrap) ruleWrap.classList.toggle('hidden', action === 'unique');
+    if (workoutWrap) workoutWrap.classList.toggle('hidden', action === 'skip');
+    if (titleWrap) titleWrap.classList.toggle('hidden', action === 'skip');
+}
+
+toggleScheduleOverrideFields();
 </script>
 {% endblock %}
